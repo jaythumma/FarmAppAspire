@@ -1,0 +1,7 @@
+<Solution>
+  <Project Path="FarmAppAspire.ApiService/FarmAppAspire.ApiService.csproj" />
+  <Project Path="FarmAppAspire.AppHost/FarmAppAspire.AppHost.csproj" />
+  <Project Path="FarmAppAspire.ServiceDefaults/FarmAppAspire.ServiceDefaults.csproj" />
+  <Project Path="FarmAppAspire.Tests/FarmAppAspire.Tests.csproj" />
+  <Project Path="FarmAppAspire.Web/FarmAppAspire.Web.csproj" />
+</Solution>
