@@ -3,10 +3,12 @@ var builder = DistributedApplication.CreateBuilder(args);
 var cache = builder.AddRedis("cache");
 
 var identityDb = builder.AddPostgres("identity-db")
-    .WithDataVolume();
+    .WithDataVolume()
+    .WithPgAdmin();
 
 var customerDb = builder.AddPostgres("customer-db")
-    .WithDataVolume();
+    .WithDataVolume()
+    .WithPgAdmin();
 
 var apiService = builder.AddProject<Projects.FarmAppAspire_ApiService>("apiservice")
     .WithHttpHealthCheck("/health");
