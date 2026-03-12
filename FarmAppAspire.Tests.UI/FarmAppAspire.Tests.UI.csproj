@@ -10,31 +10,28 @@
     <TestingPlatformDotnetTestSupport>true</TestingPlatformDotnetTestSupport>
   </PropertyGroup>
 
-
   <ItemGroup>
     <PackageReference Include="Aspire.Hosting.Testing" Version="13.1.0" />
     <PackageReference Include="coverlet.collector" Version="6.0.2" />
-    <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" Version="10.0.4" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
-    <PackageReference Include="Testcontainers.PostgreSql" Version="4.10.0" />
+    <PackageReference Include="Microsoft.Playwright" Version="1.58.0" />
     <PackageReference Include="xunit.runner.visualstudio" Version="3.1.4" />
     <PackageReference Include="xunit.v3" Version="3.0.1" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\FarmAppAspire.AppHost\FarmAppAspire.AppHost.csproj" />
-    <ProjectReference Include="..\FarmAppAspire.CustomerService\FarmAppAspire.CustomerService.csproj" />
-    <ProjectReference Include="..\FarmAppAspire.Web\FarmAppAspire.Web.csproj" />
   </ItemGroup>
 
   <ItemGroup>
     <Using Include="System.Net" />
-    <Using Include="Microsoft.Extensions.DependencyInjection" />
-    <Using Include="Aspire.Hosting.ApplicationModel" />
+    <Using Include="Microsoft.Playwright" />
     <Using Include="Aspire.Hosting.Testing" />
     <Using Include="Xunit" />
-    <Using Include="System.Net.Http.Json" />
-    <Using Include="FarmAppAspire.CustomerService.Models" />
   </ItemGroup>
+
+  <Target Name="InstallPlaywrightBrowsers" AfterTargets="Build">
+    <Exec Command="pwsh $(ProjectDir)bin\$(Configuration)\net10.0\playwright.ps1 install chromium" IgnoreExitCode="true" />
+  </Target>
 
 </Project>

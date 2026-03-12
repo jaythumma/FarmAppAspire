@@ -1,0 +1,30 @@
+codecov:
+  require_ci_to_pass: no
+
+coverage:
+  status:
+    project:
+      default:
+        target: 80%
+        threshold: 2%
+    patch:
+      default:
+        target: 80%
+        threshold: 5%
+
+flags:
+  customerservice:
+    paths:
+      - FarmAppAspire.CustomerService/
+    target: 90%
+  auth:
+    paths:
+      - FarmAppAspire.Web/Data/IdentitySeeder.cs
+      - FarmAppAspire.Web/CustomerApiClientHandler.cs
+      - FarmAppAspire.Web/Pages/Account/Login.cshtml.cs
+    target: 90%
+
+comment:
+  layout: "reach,diff,flags,files"
+  behavior: default
+  require_changes: false

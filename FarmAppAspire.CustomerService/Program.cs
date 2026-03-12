@@ -67,6 +67,9 @@ customers.MapGet("{id:guid}", async (Guid id, CustomerDbContext db) =>
 // POST /customers
 customers.MapPost("", async (CreateCustomerRequest req, CustomerDbContext db, HttpContext ctx) =>
 {
+    if (string.IsNullOrWhiteSpace(req.DisplayName))
+        return Results.Problem("DisplayName is required.", statusCode: StatusCodes.Status400BadRequest);
+
     var customer = new Customer
     {
         Id = Guid.NewGuid(),

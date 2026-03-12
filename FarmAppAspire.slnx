@@ -3,6 +3,8 @@
   <Project Path="FarmAppAspire.AppHost/FarmAppAspire.AppHost.csproj" />
   <Project Path="FarmAppAspire.CustomerService/FarmAppAspire.CustomerService.csproj" />
   <Project Path="FarmAppAspire.ServiceDefaults/FarmAppAspire.ServiceDefaults.csproj" />
+  <Project Path="FarmAppAspire.Tests.UI/FarmAppAspire.Tests.UI.csproj" />
+  <Project Path="FarmAppAspire.Tests.Unit/FarmAppAspire.Tests.Unit.csproj" />
   <Project Path="FarmAppAspire.Tests/FarmAppAspire.Tests.csproj" />
   <Project Path="FarmAppAspire.Web/FarmAppAspire.Web.csproj" />
 </Solution>

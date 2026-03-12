@@ -1,0 +1,148 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+jobs:
+  unit-tests:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.x"
+
+      - name: Restore
+        run: dotnet restore FarmAppAspire.Tests.Unit/FarmAppAspire.Tests.Unit.csproj
+
+      - name: Run unit tests
+        run: >
+          dotnet test FarmAppAspire.Tests.Unit/FarmAppAspire.Tests.Unit.csproj
+          --no-restore
+          --collect:"XPlat Code Coverage"
+          --results-directory ./coverage/unit
+          --logger trx
+
+      - name: Upload unit coverage
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-unit
+          path: coverage/unit/**/coverage.cobertura.xml
+
+  integration-tests:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.x"
+
+      - name: Restore
+        run: dotnet restore FarmAppAspire.Tests/FarmAppAspire.Tests.csproj
+
+      - name: Run integration tests
+        run: >
+          dotnet test FarmAppAspire.Tests/FarmAppAspire.Tests.csproj
+          --no-restore
+          --collect:"XPlat Code Coverage"
+          --results-directory ./coverage/integration
+          --logger trx
+
+      - name: Upload integration coverage
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-integration
+          path: coverage/integration/**/coverage.cobertura.xml
+
+  ui-tests:
+    name: Playwright UI Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.x"
+
+      - name: Restore
+        run: dotnet restore FarmAppAspire.Tests.UI/FarmAppAspire.Tests.UI.csproj
+
+      - name: Build UI tests
+        run: dotnet build FarmAppAspire.Tests.UI/FarmAppAspire.Tests.UI.csproj --no-restore
+
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        id: playwright-cache
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ hashFiles('**/FarmAppAspire.Tests.UI.csproj') }}
+
+      - name: Install Playwright browsers
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
+        run: pwsh FarmAppAspire.Tests.UI/bin/Debug/net10.0/playwright.ps1 install --with-deps chromium
+
+      - name: Run Playwright UI tests
+        run: >
+          dotnet test FarmAppAspire.Tests.UI/FarmAppAspire.Tests.UI.csproj
+          --no-build
+          --logger trx
+        env:
+          FARM_ADMIN_EMAIL: admin@farm.local
+          FARM_ADMIN_PASSWORD: Farm@dev123!
+
+  coverage-report:
+    name: Coverage Report
+    runs-on: ubuntu-latest
+    needs: [unit-tests, integration-tests]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.x"
+
+      - name: Download unit coverage
+        uses: actions/download-artifact@v4
+        with:
+          name: coverage-unit
+          path: coverage/unit
+
+      - name: Download integration coverage
+        uses: actions/download-artifact@v4
+        with:
+          name: coverage-integration
+          path: coverage/integration
+
+      - name: Install ReportGenerator
+        run: dotnet tool install --global dotnet-reportgenerator-globaltool
+
+      - name: Generate HTML coverage report
+        run: >
+          reportgenerator
+          -reports:"coverage/**/*.xml"
+          -targetdir:coverage/html
+          -reporttypes:"Html;Cobertura;Badges"
+          -assemblyfilters:"+FarmAppAspire.*"
+
+      - name: Upload HTML report artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage/html
+
+      - name: Upload to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          files: coverage/html/Cobertura.xml
+          fail_ci_if_error: true
+          token: ${{ secrets.CODECOV_TOKEN }}
