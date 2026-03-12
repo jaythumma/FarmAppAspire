@@ -1,7 +1,7 @@
 using FarmAppAspire.Web;
 using FarmAppAspire.Web.Components;
-using Microsoft.AspNetCore.Authentication;
-using Microsoft.AspNetCore.Authentication.Cookies;
+using FarmAppAspire.Web.Data;
+using Microsoft.AspNetCore.Identity;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -15,16 +15,28 @@ builder.Services.AddRazorComponents()
 
 builder.Services.AddRazorPages();
 
-builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
-    .AddCookie(options =>
+builder.AddNpgsqlDbContext<ApplicationDbContext>("identity-db");
+
+builder.Services.AddIdentity<IdentityUser, IdentityRole>(options =>
     {
-        options.LoginPath = "/account/login";
-        options.Cookie.HttpOnly = true;
-        options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
-        options.Cookie.SameSite = SameSiteMode.Strict;
-    });
+        options.SignIn.RequireConfirmedAccount = false;
+        options.Lockout.MaxFailedAccessAttempts = 5;
+        options.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(15);
+    })
+    .AddEntityFrameworkStores<ApplicationDbContext>()
+    .AddDefaultTokenProviders();
+
+builder.Services.ConfigureApplicationCookie(options =>
+{
+    options.LoginPath = "/account/login";
+    options.Cookie.HttpOnly = true;
+    options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
+    options.Cookie.SameSite = SameSiteMode.Strict;
+});
 
 builder.Services.AddAuthorization();
+
+builder.Services.AddHostedService<IdentitySeeder>();
 
 builder.Services.AddHttpClient<WeatherApiClient>(client =>
     {
@@ -55,9 +67,9 @@ app.MapStaticAssets();
 
 app.MapRazorPages();
 
-app.MapPost("/account/logout", async (HttpContext ctx) =>
+app.MapPost("/account/logout", async (SignInManager<IdentityUser> signInManager) =>
 {
-    await ctx.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+    await signInManager.SignOutAsync();
     return Results.Redirect("/account/login");
 });
 
