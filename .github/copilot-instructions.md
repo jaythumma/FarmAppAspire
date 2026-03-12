@@ -1,5 +1,16 @@
 # FarmAppAspire – Copilot Instructions
 
+# Requirements
+
+- Write clear, self-documenting code
+- Keep abstractions simple and focused
+- Minimize dependencies and coupling
+- Use modern C# features appropriately
+- Any code you commit MUST compile, and new and existing tests related to the change MUST pass.
+- MUST make your best effort to ensure any code changes satisfy those criteria before committing. If for any reason you were unable to build or test code changes, you MUST report that.
+- must NOT claim success unless all builds and tests pass as described above.
+- Before completing, use the code-review skill to review your code changes. Any issues flagged as errors or warnings should be addressed before completing.
+
 ## Architecture Overview
 
 This is a **.NET 10 Aspire** solution with five projects:
@@ -46,9 +57,32 @@ API communication from the frontend uses typed `HttpClient` wrappers (see `Weath
 - Async data load with progressive rendering: `@attribute [StreamRendering(true)]` (see `Weather.razor`)
 - Output caching via Redis: `@attribute [OutputCache(Duration = 5)]` (requires `builder.AddRedisOutputCache("cache")` in `Web/Program.cs`)
 
+## Code Style & Conventions
+- Use **C# records** for immutable data models (e.g., `record Order(Guid Id, string CustomerId, ...)`).
+- Prefer **primary constructors** (C# 12+) for dependency injection, Minimize constructor injection
+- Use **async/await** throughout; all I/O operations must be async and accept a `CancellationToken`.
+- Use **minimal API endpoints** organized as extension methods (e.g., `MapOrderEndpoints()`) on `WebApplication`.
+- Group related routes with `MapGroup(prefix)` and annotate with `.WithName()` and `.Produces<T>()` for OpenAPI.
+- Follow the `KingsAspire.[ServiceName]` namespace convention.
+- Place models in `Models/`, endpoint extensions in `Endpoints/`, and service logic in `Services/`.
+- Separate state from behavior, Prefer pure methods
+- Prefer composition with interfaces, Use extension methods appropriately
+- Design for testability
+
+- ## Data Access Patterns
+- Scaffold repositories and DbContexts as needed for each service, but keep them focused on the specific data needs of that service.
+- Keep entities narrow and focused; avoid "God objects" that try to represent too much.
+- Use EF Core's fluent API to configure relationships and constraints; avoid data annotations for complex configurations.
+
+## Dependency Injection
+
+- Register services in `Program.cs` using the `builder.Services` extensions.
+- Prefer `AddScoped<>()` for request-scoped services; use `AddSingleton<>()` only for stateless/thread-safe services.
+- Always use constructor injection (or primary constructor parameters) — never use `ServiceLocator` or `IServiceProvider` directly.
+
 ## Testing
 
-Tests use `DistributedApplicationTestingBuilder` to spin up the **full Aspire app** in-process:
+- Tests use `DistributedApplicationTestingBuilder` to spin up the **full Aspire app** in-process:
 ```csharp
 var appHost = await DistributedApplicationTestingBuilder.CreateAsync<Projects.FarmAppAspire_AppHost>(cancellationToken);
 await using var app = await appHost.BuildAsync(cancellationToken);
@@ -56,9 +90,18 @@ await app.StartAsync(cancellationToken);
 var httpClient = app.CreateHttpClient("webfrontend");
 await app.ResourceNotifications.WaitForResourceHealthyAsync("webfrontend", cancellationToken);
 ```
-Always `WaitForResourceHealthyAsync` before making HTTP assertions. Use `TestContext.Current.CancellationToken` for xUnit v3 cancellation.
-
-Run tests:
+- Always `WaitForResourceHealthyAsync` before making HTTP assertions. Use `TestContext.Current.CancellationToken` for xUnit v3 cancellation.
+- Create tests for both service logic (unit tests) and API endpoints (integration tests).
+- Use `Aspire.Hosting.Testing` for integration tests that involve multiple services and real HTTP communication.
+- Use `Moq` for mocking dependencies in unit tests.
+- Write tests that validate expected behavior and edge cases, not just to increase coverage numbers.
+- Use `Playwright` for testing blazor components.
+- All tests should pass when code changes are made; aim for high coverage on critical paths but prioritize meaningful tests over 100% coverage.
+- ensure code coverage is at least 90% for critical paths and 80% overall.
+- do not merge code changes that reduce coverage below these thresholds without a compelling reason and a plan to add more tests.
+- document any significant gaps in test coverage and the rationale for not covering them.
+- do not include trivial tests that only exist to increase coverage numbers; all tests should provide meaningful validation of behavior.
+- Run tests:
 ```
 dotnet test FarmAppAspire.Tests
 ```
