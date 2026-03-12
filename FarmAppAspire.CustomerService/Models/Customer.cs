@@ -15,6 +15,8 @@ public class Customer
 
     public string? Notes { get; set; }
     public bool BillingUsesShipping { get; set; } = true;
+    public string? CustomerKey { get; set; }
+    public bool CustomerKeyCollision { get; set; }
     public DateTime CreatedAt { get; set; }
     public string CreatedBy { get; set; } = string.Empty;
     public DateTime? ModifiedAt { get; set; }

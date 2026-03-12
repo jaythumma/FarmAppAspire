@@ -1,4 +1,5 @@
 using FarmAppAspire.CustomerService.Data;
+using FarmAppAspire.CustomerService.Endpoints;
 using FarmAppAspire.CustomerService.Models;
 using Microsoft.EntityFrameworkCore;
 using System.Text.Json.Serialization;
@@ -316,5 +317,15 @@ customers.MapDelete("{id:guid}/addresses/{aid:guid}", async (Guid id, Guid aid, 
 }).AddEndpointFilterFactory(UserIdFilter);
 
 app.MapDefaultEndpoints();
+
+// ── Order management routes ──────────────────────────────────────────────────
+app.MapProductEndpoints();
+app.MapCustomerPricingEndpoints();
+app.MapStandingOrderEndpoints();
+app.MapOrderInstanceEndpoints();
+app.MapFedExOrderEndpoints();
+app.MapInvoiceEndpoints();
+app.MapCustomerKeyEndpoints();
+app.MapAdminEndpoints();
 
 app.Run();
