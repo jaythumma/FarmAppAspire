@@ -46,16 +46,198 @@ public class CustomerFlowTests(AspirePlaywrightFixture fixture) : IAsyncLifetime
         await _page.WaitForTimeoutAsync(4000);
 
         await LoginHelper.RetrySelectUntilValueAsync(_page, "select.form-select", "Wholesale");
-        // InputText renders without explicit type in .NET 10 Blazor; target by position
+        // Display Name is the first text input
         await _page.Locator("input.form-control").First.FillAsync(customerName);
+        // Company Name is required for Wholesale
+        await FillCompanyNameAsync(_page, "Test Corp Ltd");
+
+        // Fill in required shipping address fields
+        await FillShippingAddressAsync(_page, "1 Main St", "Springfield", "IL", "62701", "US");
+
         await _page.ClickAsync("button[type='submit']:has-text('Save')");
-        await _page.WaitForURLAsync("**/customers/**");
+        // Wait for navigation from /customers/create to /customers/{id}
+        await _page.WaitForURLAsync(url => url.Contains("/customers/") && !url.Contains("/create"), new() { Timeout = 30000 });
 
         await _page.GotoAsync($"{fixture.BaseUrl}/customers");
-        await _page.WaitForSelectorAsync("h1");
+        // InteractiveServer list: wait for the customer name to appear after circuit connects
+        await _page.Locator($"text={customerName}").First.WaitForAsync(new() { Timeout = 30000 });
 
         var pageContent = await _page.InnerTextAsync("body");
         Assert.Contains(customerName, pageContent, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task CreateForm_ShowsShippingAddressSection()
+    {
+        await LoginHelper.LoginAsync(_page, fixture.BaseUrl,
+            LoginHelper.AdminEmail, LoginHelper.AdminPassword);
+        await _page.GotoAsync($"{fixture.BaseUrl}/customers/create");
+        await _page.WaitForSelectorAsync("h5");
+        await _page.WaitForTimeoutAsync(3000);
+
+        var body = await _page.InnerTextAsync("body");
+        Assert.Contains("Shipping Address", body, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task CreateForm_BillingToggle_CheckedByDefault_HidesBillingFields()
+    {
+        await LoginHelper.LoginAsync(_page, fixture.BaseUrl,
+            LoginHelper.AdminEmail, LoginHelper.AdminPassword);
+        await _page.GotoAsync($"{fixture.BaseUrl}/customers/create");
+        await _page.WaitForSelectorAsync("#billingUsesShipping");
+        await _page.WaitForTimeoutAsync(3000);
+
+        // Checkbox should be checked by default
+        var isChecked = await _page.IsCheckedAsync("#billingUsesShipping");
+        Assert.True(isChecked);
+
+        // Billing address fields should NOT be visible
+        var billingSection = await _page.QuerySelectorAsync("h5:has-text('Billing Address') + div .form-control");
+        // When toggle is on, the billing inputs are hidden via @if(!BillingUsesShipping)
+        Assert.Null(billingSection);
+    }
+
+    [Fact]
+    public async Task CreateForm_UncheckBillingToggle_ShowsBillingFields()
+    {
+        await LoginHelper.LoginAsync(_page, fixture.BaseUrl,
+            LoginHelper.AdminEmail, LoginHelper.AdminPassword);
+        await _page.GotoAsync($"{fixture.BaseUrl}/customers/create");
+        await _page.WaitForSelectorAsync("#billingUsesShipping");
+        await _page.WaitForTimeoutAsync(3000);
+
+        // Uncheck "same as shipping"
+        await _page.UncheckAsync("#billingUsesShipping");
+        await _page.WaitForTimeoutAsync(500);
+
+        // Billing section inputs should now be visible
+        var body = await _page.InnerTextAsync("body");
+        Assert.Contains("Billing Address", body, StringComparison.OrdinalIgnoreCase);
+        var inputs = await _page.Locator("input.form-control").CountAsync();
+        Assert.True(inputs > 6, "Billing address fields should appear after unchecking toggle");
+    }
+
+    [Fact]
+    public async Task CreateForm_WholesaleType_CompanyNameRequired()
+    {
+        await LoginHelper.LoginAsync(_page, fixture.BaseUrl,
+            LoginHelper.AdminEmail, LoginHelper.AdminPassword);
+        await _page.GotoAsync($"{fixture.BaseUrl}/customers/create");
+        await _page.WaitForSelectorAsync("select.form-select");
+        await _page.WaitForTimeoutAsync(3000);
+
+        await LoginHelper.RetrySelectUntilValueAsync(_page, "select.form-select", "Wholesale");
+        await _page.WaitForTimeoutAsync(500);
+
+        // Company Name field should appear and be marked required
+        var body = await _page.InnerTextAsync("body");
+        Assert.Contains("Company Name", body, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task CreateForm_SubmitWithoutShipping_ShowsValidationError()
+    {
+        await LoginHelper.LoginAsync(_page, fixture.BaseUrl,
+            LoginHelper.AdminEmail, LoginHelper.AdminPassword);
+        await _page.GotoAsync($"{fixture.BaseUrl}/customers/create");
+        await _page.WaitForSelectorAsync("select.form-select");
+        await _page.WaitForTimeoutAsync(3000);
+
+        // Fill display name but leave shipping address empty
+        await _page.Locator("input.form-control").First.FillAsync("Test Customer");
+
+        await _page.ClickAsync("button[type='submit']:has-text('Save')");
+        await _page.WaitForTimeoutAsync(500);
+
+        // Should still be on the create page (validation prevented submit)
+        Assert.Contains("/customers/create", _page.Url);
+    }
+
+    [Fact]
+    public async Task DetailPage_BillingUsesShipping_ShowsSameAsShippingBadge()
+    {
+        // Create a customer (BillingUsesShipping defaults to true)
+        var customerName = $"Billing-{Guid.NewGuid().ToString("N")[..8]}";
+        await LoginHelper.LoginAsync(_page, fixture.BaseUrl,
+            LoginHelper.AdminEmail, LoginHelper.AdminPassword);
+
+        await _page.GotoAsync($"{fixture.BaseUrl}/customers/create");
+        await _page.WaitForSelectorAsync("select.form-select");
+        await _page.WaitForTimeoutAsync(4000);
+
+        await LoginHelper.RetrySelectUntilValueAsync(_page, "select.form-select", "Wholesale");
+        await _page.Locator("input.form-control").First.FillAsync(customerName);
+        await FillCompanyNameAsync(_page, "Billing Corp");
+        await FillShippingAddressAsync(_page, "5 Test Ave", "Chicago", "IL", "60601", "US");
+        await _page.ClickAsync("button[type='submit']:has-text('Save')");
+        await _page.WaitForURLAsync(url => url.Contains("/customers/") && !url.Contains("/create"), new() { Timeout = 30000 });
+
+        // On detail page, billing section should show "Same as shipping address" badge
+        await _page.WaitForSelectorAsync("h5:has-text('Billing')");
+        await _page.WaitForTimeoutAsync(2000);
+        var body = await _page.InnerTextAsync("body");
+        Assert.Contains("Same as shipping address", body, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task DetailPage_BillingUndefined_ShowsNotSetPrompt()
+    {
+        // Create customer with BillingUsesShipping = false and no billing address
+        // We do this by unchecking the toggle but leaving billing fields empty
+        var customerName = $"NoBilling-{Guid.NewGuid().ToString("N")[..8]}";
+        await LoginHelper.LoginAsync(_page, fixture.BaseUrl,
+            LoginHelper.AdminEmail, LoginHelper.AdminPassword);
+
+        await _page.GotoAsync($"{fixture.BaseUrl}/customers/create");
+        await _page.WaitForSelectorAsync("select.form-select");
+        await _page.WaitForTimeoutAsync(4000);
+
+        await LoginHelper.RetrySelectUntilValueAsync(_page, "select.form-select", "Wholesale");
+        await _page.Locator("input.form-control").First.FillAsync(customerName);
+        await FillCompanyNameAsync(_page, "NoBilling Corp");
+        await FillShippingAddressAsync(_page, "7 Oak St", "Peoria", "IL", "61602", "US");
+        await _page.UncheckAsync("#billingUsesShipping");
+        await _page.WaitForTimeoutAsync(300);
+        await _page.ClickAsync("button[type='submit']:has-text('Save')");
+        await _page.WaitForURLAsync(url => url.Contains("/customers/") && !url.Contains("/create"), new() { Timeout = 30000 });
+
+        // Wait for InteractiveServer circuit to render the billing section
+        await _page.WaitForSelectorAsync("h5:has-text('Billing')");
+        await _page.WaitForTimeoutAsync(2000);
+
+        var body = await _page.InnerTextAsync("body");
+        Assert.Contains("not set", body, StringComparison.OrdinalIgnoreCase);
+    }
+
+    // ── Helpers
+
+    /// <summary>
+    /// Fills the shipping address fields. The form renders shipping inputs in a
+    /// div.row immediately after the "Shipping Address" h5 heading.
+    /// </summary>
+    private static async Task FillShippingAddressAsync(
+        IPage page, string line1, string city, string state, string postalCode, string country)
+    {
+        // Scope to the div.row directly after the Shipping Address heading
+        var section = page.Locator("h5:has-text('Shipping Address') + .row");
+        var inputs = section.Locator("input.form-control");
+        await inputs.Nth(0).FillAsync(line1);   // Line1
+        // Nth(1) is Line2 — skip (optional)
+        await inputs.Nth(2).FillAsync(city);    // City
+        await inputs.Nth(3).FillAsync(state);   // State
+        await inputs.Nth(4).FillAsync(postalCode); // PostalCode
+        await inputs.Nth(5).FillAsync(country); // Country
+    }
+
+    /// <summary>Fills Company Name for Wholesale customers.</summary>
+    private static async Task FillCompanyNameAsync(IPage page, string companyName)
+    {
+        // Company Name input appears after Primary Phone when Wholesale is selected
+        var label = page.Locator("label:has-text('Company Name')").First;
+        await label.WaitForAsync();
+        // Company Name input follows its label as an adjacent sibling
+        await page.Locator("label:has-text('Company Name') + input.form-control").First.FillAsync(companyName);
     }
 
     [Fact]

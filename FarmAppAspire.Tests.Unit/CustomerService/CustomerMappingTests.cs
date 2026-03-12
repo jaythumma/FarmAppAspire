@@ -80,6 +80,17 @@ public class CustomerMappingTests
     }
 
     [Fact]
+    public void ToDetailDto_MapsBillingUsesShipping()
+    {
+        var customer = BuildCustomer();
+        customer.BillingUsesShipping = true;
+
+        var dto = customer.ToDetailDto();
+
+        Assert.True(dto.BillingUsesShipping);
+    }
+
+    [Fact]
     public void ContactToDto_MapsAllFields()
     {
         var contact = new CustomerContact

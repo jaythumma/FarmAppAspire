@@ -13,6 +13,7 @@ public record CustomerDetailDto(
     string? CompanyName, string? TaxId, PaymentTerms? PaymentTerms,
     string? PrimaryEmail, string? PrimaryPhone, string? Notes,
     DateTime CreatedAt, string CreatedBy, DateTime? ModifiedAt, string? ModifiedBy,
+    bool BillingUsesShipping,
     IEnumerable<ContactDto> Contacts,
     IEnumerable<AddressDto> Addresses);
 
@@ -25,17 +26,30 @@ public record AddressDto(
     string Line1, string? Line2, string City, string State,
     string PostalCode, string Country, bool IsDefault);
 
+// ── Embedded address fields (used in create request) ─────────────────────────
+public record AddressFields(
+    [Required, MinLength(1)] string Line1,
+    string? Line2,
+    [Required, MinLength(1)] string City,
+    [Required, MinLength(1)] string State,
+    [Required, MinLength(1)] string PostalCode,
+    [Required, MinLength(1)] string Country);
+
 // ── Create / Update requests ─────────────────────────────────────────────────
 public record CreateCustomerRequest(
     [Required] CustomerType Type,
     [Required, MinLength(1)] string DisplayName,
     string? CompanyName, string? TaxId, PaymentTerms? PaymentTerms,
-    string? PrimaryEmail, string? PrimaryPhone, string? Notes);
+    string? PrimaryEmail, string? PrimaryPhone, string? Notes,
+    [Required] AddressFields ShippingAddress,
+    bool BillingUsesShipping = true,
+    AddressFields? BillingAddress = null);
 
 public record UpdateCustomerRequest(
     [Required, MinLength(1)] string DisplayName,
     string? CompanyName, string? TaxId, PaymentTerms? PaymentTerms,
-    string? PrimaryEmail, string? PrimaryPhone, string? Notes);
+    string? PrimaryEmail, string? PrimaryPhone, string? Notes,
+    bool? BillingUsesShipping = null);
 
 public record CreateContactRequest(
     [Required] ContactRole Role,
@@ -78,6 +92,7 @@ public static class CustomerMappings
         c.Id, c.Type, c.DisplayName, c.CompanyName, c.TaxId, c.PaymentTerms,
         c.PrimaryEmail, c.PrimaryPhone, c.Notes,
         c.CreatedAt, c.CreatedBy, c.ModifiedAt, c.ModifiedBy,
+        c.BillingUsesShipping,
         c.Contacts.Select(x => x.ToDto()).OrderByDescending(x => x.IsPrimary),
         c.Addresses.Select(x => x.ToDto()).OrderByDescending(x => x.IsDefault));
 

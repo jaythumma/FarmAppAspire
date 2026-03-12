@@ -69,6 +69,18 @@ customers.MapPost("", async (CreateCustomerRequest req, CustomerDbContext db, Ht
 {
     if (string.IsNullOrWhiteSpace(req.DisplayName))
         return Results.Problem("DisplayName is required.", statusCode: StatusCodes.Status400BadRequest);
+    if (req.Type == CustomerType.Wholesale && string.IsNullOrWhiteSpace(req.CompanyName))
+        return Results.Problem("CompanyName is required for Wholesale customers.", statusCode: StatusCodes.Status400BadRequest);
+
+    if (string.IsNullOrWhiteSpace(req.ShippingAddress?.Line1) ||
+        string.IsNullOrWhiteSpace(req.ShippingAddress?.City) ||
+        string.IsNullOrWhiteSpace(req.ShippingAddress?.State) ||
+        string.IsNullOrWhiteSpace(req.ShippingAddress?.PostalCode) ||
+        string.IsNullOrWhiteSpace(req.ShippingAddress?.Country))
+        return Results.Problem("Shipping address with Line1, City, State, PostalCode, and Country is required.", statusCode: StatusCodes.Status400BadRequest);
+
+    var now = DateTime.UtcNow;
+    var userId = ctx.Request.Headers["X-User-Id"].ToString();
 
     var customer = new Customer
     {
@@ -81,12 +93,54 @@ customers.MapPost("", async (CreateCustomerRequest req, CustomerDbContext db, Ht
         PrimaryEmail = req.PrimaryEmail,
         PrimaryPhone = req.PrimaryPhone,
         Notes = req.Notes,
-        CreatedAt = DateTime.UtcNow,
-        CreatedBy = ctx.Request.Headers["X-User-Id"].ToString(),
+        BillingUsesShipping = req.BillingUsesShipping,
+        CreatedAt = now,
+        CreatedBy = userId,
     };
     db.Customers.Add(customer);
+
+    db.CustomerAddresses.Add(new CustomerAddress
+    {
+        Id = Guid.NewGuid(),
+        CustomerId = customer.Id,
+        Label = "Shipping",
+        Type = AddressType.Shipping,
+        Line1 = req.ShippingAddress.Line1,
+        Line2 = req.ShippingAddress.Line2,
+        City = req.ShippingAddress.City,
+        State = req.ShippingAddress.State,
+        PostalCode = req.ShippingAddress.PostalCode,
+        Country = req.ShippingAddress.Country,
+        IsDefault = true,
+        CreatedAt = now,
+    });
+
+    if (!req.BillingUsesShipping && req.BillingAddress is not null)
+    {
+        db.CustomerAddresses.Add(new CustomerAddress
+        {
+            Id = Guid.NewGuid(),
+            CustomerId = customer.Id,
+            Label = "Billing",
+            Type = AddressType.Billing,
+            Line1 = req.BillingAddress.Line1,
+            Line2 = req.BillingAddress.Line2,
+            City = req.BillingAddress.City,
+            State = req.BillingAddress.State,
+            PostalCode = req.BillingAddress.PostalCode,
+            Country = req.BillingAddress.Country,
+            IsDefault = false,
+            CreatedAt = now,
+        });
+    }
+
     await db.SaveChangesAsync();
-    return Results.Created($"/customers/{customer.Id}", customer.ToDetailDto());
+
+    var created = await db.Customers
+        .Include(x => x.Contacts)
+        .Include(x => x.Addresses)
+        .FirstAsync(x => x.Id == customer.Id);
+    return Results.Created($"/customers/{customer.Id}", created.ToDetailDto());
 }).AddEndpointFilterFactory(UserIdFilter);
 
 // PUT /customers/{id}
@@ -94,6 +148,8 @@ customers.MapPut("{id:guid}", async (Guid id, UpdateCustomerRequest req, Custome
 {
     var c = await db.Customers.FindAsync(id);
     if (c is null) return Results.NotFound();
+    if (c.Type == CustomerType.Wholesale && string.IsNullOrWhiteSpace(req.CompanyName))
+        return Results.Problem("CompanyName is required for Wholesale customers.", statusCode: StatusCodes.Status400BadRequest);
     c.DisplayName = req.DisplayName;
     c.CompanyName = req.CompanyName;
     c.TaxId = req.TaxId;
@@ -101,6 +157,8 @@ customers.MapPut("{id:guid}", async (Guid id, UpdateCustomerRequest req, Custome
     c.PrimaryEmail = req.PrimaryEmail;
     c.PrimaryPhone = req.PrimaryPhone;
     c.Notes = req.Notes;
+    if (req.BillingUsesShipping.HasValue)
+        c.BillingUsesShipping = req.BillingUsesShipping.Value;
     c.ModifiedAt = DateTime.UtcNow;
     c.ModifiedBy = ctx.Request.Headers["X-User-Id"].ToString();
     await db.SaveChangesAsync();
@@ -228,6 +286,16 @@ customers.MapPut("{id:guid}/addresses/{aid:guid}", async (Guid id, Guid aid, Upd
     address.PostalCode = req.PostalCode;
     address.Country = req.Country;
     address.IsDefault = req.IsDefault;
+
+    if (req.Type is AddressType.Shipping or AddressType.Both)
+    {
+        var customer = await db.Customers.FindAsync(id);
+        if (customer is not null && customer.BillingUsesShipping)
+        {
+            customer.BillingUsesShipping = false;
+        }
+    }
+
     await db.SaveChangesAsync();
     return Results.Ok(address.ToDto());
 }).AddEndpointFilterFactory(UserIdFilter);
