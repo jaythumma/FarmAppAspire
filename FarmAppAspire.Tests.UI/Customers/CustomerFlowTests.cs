@@ -109,12 +109,15 @@ public class CustomerFlowTests(AspirePlaywrightFixture fixture) : IAsyncLifetime
 
         // Uncheck "same as shipping"
         await _page.UncheckAsync("#billingUsesShipping");
-        await _page.WaitForTimeoutAsync(500);
+        // Wait for billing AddressForm to render: a second state dropdown appears
+        await _page.Locator("select:has(option[value='AL'])").Nth(1)
+            .WaitForAsync(new() { Timeout = 15000 });
 
         // Billing section inputs should now be visible
         var body = await _page.InnerTextAsync("body");
         Assert.Contains("Billing Address", body, StringComparison.OrdinalIgnoreCase);
         var inputs = await _page.Locator("input.form-control").CountAsync();
+        // main(3) + shipping(5) + billing(5) = 13 inputs; state fields are <select> not <input>
         Assert.True(inputs > 6, "Billing address fields should appear after unchecking toggle");
     }
 
@@ -219,15 +222,17 @@ public class CustomerFlowTests(AspirePlaywrightFixture fixture) : IAsyncLifetime
     private static async Task FillShippingAddressAsync(
         IPage page, string line1, string city, string state, string postalCode, string country)
     {
-        // Scope to the div.row directly after the Shipping Address heading
-        var section = page.Locator("h5:has-text('Shipping Address') + .row");
-        var inputs = section.Locator("input.form-control");
-        await inputs.Nth(0).FillAsync(line1);   // Line1
-        // Nth(1) is Line2 — skip (optional)
-        await inputs.Nth(2).FillAsync(city);    // City
-        await inputs.Nth(3).FillAsync(state);   // State
-        await inputs.Nth(4).FillAsync(postalCode); // PostalCode
-        await inputs.Nth(5).FillAsync(country); // Country
+        // All current callers select Wholesale type first, so input indices:
+        // 0:DisplayName, 1:Email, 2:Phone, 3:CompanyName, 4:TaxId (no PaymentTerms/Notes)
+        // 5:Line1, 6:Line2, 7:City, [State=select], 8:PostalCode, 9:Country
+        var allInputs = page.Locator("input.form-control");
+        await allInputs.Nth(5).FillAsync(line1);
+        // Nth(6) is Line2 — skip (optional)
+        await allInputs.Nth(7).FillAsync(city);
+        // State is a <select> dropdown; identify it by containing an option with value="AL"
+        await page.Locator("select:has(option[value='AL'])").First.SelectOptionAsync(state);
+        await allInputs.Nth(8).FillAsync(postalCode);
+        await allInputs.Nth(9).FillAsync(country);
     }
 
     /// <summary>Fills Company Name for Wholesale customers.</summary>
@@ -289,6 +294,38 @@ public class CustomerFlowTests(AspirePlaywrightFixture fixture) : IAsyncLifetime
     // no "Add Address" UI exists, so this scenario is not testable via Playwright.
     // [Fact]
     // public async Task FarmAdmin_DeleteDefaultAddress_PromotesNextAddress() { ... }
+
+    [Fact]
+    public async Task CreateForm_ShippingStateField_IsDropdown()
+    {
+        await LoginHelper.LoginAsync(_page, fixture.BaseUrl,
+            LoginHelper.AdminEmail, LoginHelper.AdminPassword);
+        await _page.GotoAsync($"{fixture.BaseUrl}/customers/create");
+        await _page.WaitForSelectorAsync("h5:has-text('Shipping Address')");
+        await _page.WaitForTimeoutAsync(3000);
+
+        // The state dropdown is identified by containing an option with value "AL" (Alabama)
+        var stateSelect = _page.Locator("select:has(option[value='AL'])").First;
+        await stateSelect.WaitForAsync(new() { Timeout = 15000 });
+        Assert.True(await stateSelect.IsVisibleAsync(), "State field in shipping section should be a <select> dropdown");
+    }
+
+    [Fact]
+    public async Task CreateForm_StateDropdown_ContainsAllStates()
+    {
+        await LoginHelper.LoginAsync(_page, fixture.BaseUrl,
+            LoginHelper.AdminEmail, LoginHelper.AdminPassword);
+        await _page.GotoAsync($"{fixture.BaseUrl}/customers/create");
+        await _page.WaitForSelectorAsync("h5:has-text('Shipping Address')");
+        await _page.WaitForTimeoutAsync(3000);
+
+        // The state dropdown is identified by containing an option with value "AL" (Alabama)
+        var stateSelect = _page.Locator("select:has(option[value='AL'])").First;
+        await stateSelect.WaitForAsync(new() { Timeout = 15000 });
+
+        var optionCount = await stateSelect.Locator("option").CountAsync();
+        Assert.Equal(51, optionCount); // 50 states + 1 blank placeholder
+    }
 
     }
 
