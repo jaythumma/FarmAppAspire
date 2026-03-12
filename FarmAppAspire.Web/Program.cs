@@ -35,8 +35,18 @@ builder.Services.ConfigureApplicationCookie(options =>
 });
 
 builder.Services.AddAuthorization();
+builder.Services.AddCascadingAuthenticationState();
 
 builder.Services.AddHostedService<IdentitySeeder>();
+
+builder.Services.AddHttpContextAccessor();
+
+builder.Services.AddTransient<CustomerApiClientHandler>();
+builder.Services.AddHttpClient<CustomerApiClient>(client =>
+    {
+        client.BaseAddress = new("https+http://customerservice");
+    })
+    .AddHttpMessageHandler<CustomerApiClientHandler>();
 
 builder.Services.AddHttpClient<WeatherApiClient>(client =>
     {
