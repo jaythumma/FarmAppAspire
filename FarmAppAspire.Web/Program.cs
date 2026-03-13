@@ -48,6 +48,12 @@ builder.Services.AddHttpClient<CustomerApiClient>(client =>
     })
     .AddHttpMessageHandler<CustomerApiClientHandler>();
 
+builder.Services.AddHttpClient<OrderApiClient>(client =>
+    {
+        client.BaseAddress = new("https+http://customerservice");
+    })
+    .AddHttpMessageHandler<CustomerApiClientHandler>();
+
 builder.Services.AddHttpClient<WeatherApiClient>(client =>
     {
         // This URL uses "https+http://" to indicate HTTPS is preferred over HTTP.
