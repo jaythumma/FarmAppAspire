@@ -1,0 +1,60 @@
+@page
+@model FarmAppAspire.Web.Pages.Account.LoginModel
+@{
+    Layout = null;
+}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Sign In – FarmApp</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootswatch@5/dist/flatly/bootstrap.min.css" />
+    <style>
+        body { background-color: #f8f9fa; }
+        .login-card { width: 100%; max-width: 420px; }
+        .brand-header { background-color: #18bc9c; }
+    </style>
+</head>
+<body>
+    <div class="d-flex justify-content-center align-items-center min-vh-100 px-3">
+        <div class="card shadow-sm login-card">
+            <div class="card-header brand-header text-white text-center py-4">
+                <h4 class="mb-1 fw-bold">🌾 FarmApp</h4>
+                <small class="opacity-75">Sign in to your account</small>
+            </div>
+            <div class="card-body p-4">
+                @if (Model.ErrorMessage is not null)
+                {
+                    <div class="alert alert-danger d-flex align-items-center gap-2" role="alert">
+                        <span>⚠️</span>
+                        <span>@Model.ErrorMessage</span>
+                    </div>
+                }
+                <form method="post">
+                    <input type="hidden" asp-for="ReturnUrl" />
+                    <div class="mb-3">
+                        <label asp-for="Input.Email" class="form-label fw-semibold">Email address</label>
+                        <input asp-for="Input.Email" class="form-control" placeholder="you@example.com"
+                               autocomplete="username" autofocus />
+                        <span asp-validation-for="Input.Email" class="text-danger small"></span>
+                    </div>
+                    <div class="mb-3">
+                        <label asp-for="Input.Password" class="form-label fw-semibold">Password</label>
+                        <input asp-for="Input.Password" class="form-control" placeholder="••••••••"
+                               autocomplete="current-password" />
+                        <span asp-validation-for="Input.Password" class="text-danger small"></span>
+                    </div>
+                    <div class="mb-4 form-check">
+                        <input asp-for="Input.RememberMe" class="form-check-input" />
+                        <label asp-for="Input.RememberMe" class="form-check-label text-muted">Remember me</label>
+                    </div>
+                    <button type="submit" class="btn btn-primary w-100 py-2 fw-semibold">
+                        Sign In
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
