@@ -1,0 +1,188 @@
+@page "/customers/{Id:guid}"
+@rendermode InteractiveServer
+@attribute [Authorize]
+@inject CustomerApiClient CustomerApi
+@inject NavigationManager Nav
+@implements IDisposable
+
+<PageTitle>Customer Detail</PageTitle>
+
+@if (_customer is null)
+{
+    <p><em>Loading...</em></p>
+}
+else
+{
+    <div class="d-flex align-items-center gap-2 mb-3">
+        <h1 class="mb-0">@_customer.DisplayName</h1>
+        <AuthorizeView Roles="FarmAdmin">
+            <Authorized>
+                <a href="/customers/@_customer.Id/edit" class="btn btn-sm btn-outline-secondary">Edit</a>
+            </Authorized>
+        </AuthorizeView>
+    </div>
+
+    <div class="row">
+        <div class="col-md-6">
+            <h5>Customer Info</h5>
+            <dl class="row">
+                <dt class="col-sm-4">Type</dt>
+                <dd class="col-sm-8">@_customer.Type</dd>
+
+                @if (!string.IsNullOrEmpty(_customer.CompanyName))
+                {
+                    <dt class="col-sm-4">Company</dt>
+                    <dd class="col-sm-8">@_customer.CompanyName</dd>
+                }
+
+                @if (!string.IsNullOrEmpty(_customer.TaxId))
+                {
+                    <dt class="col-sm-4">Tax ID</dt>
+                    <dd class="col-sm-8">@_customer.TaxId</dd>
+                }
+
+                @if (!string.IsNullOrEmpty(_customer.PrimaryEmail))
+                {
+                    <dt class="col-sm-4">Email</dt>
+                    <dd class="col-sm-8">@_customer.PrimaryEmail</dd>
+                }
+
+                @if (!string.IsNullOrEmpty(_customer.PrimaryPhone))
+                {
+                    <dt class="col-sm-4">Phone</dt>
+                    <dd class="col-sm-8">@_customer.PrimaryPhone</dd>
+                }
+
+                @if (_customer.PaymentTerms.HasValue)
+                {
+                    <dt class="col-sm-4">Payment Terms</dt>
+                    <dd class="col-sm-8">@_customer.PaymentTerms</dd>
+                }
+
+                @if (!string.IsNullOrEmpty(_customer.Notes))
+                {
+                    <dt class="col-sm-4">Notes</dt>
+                    <dd class="col-sm-8">@_customer.Notes</dd>
+                }
+            </dl>
+        </div>
+
+        <div class="col-md-6">
+            @{
+                var shippingAddr = _customer.Addresses.FirstOrDefault(a => a.Type == AddressType.Shipping);
+                var billingAddr = _customer.Addresses.FirstOrDefault(a => a.Type == AddressType.Billing);
+            }
+
+            @if (shippingAddr is not null)
+            {
+                <h5>Shipping Address</h5>
+                <address>
+                    @shippingAddr.Line1<br />
+                    @if (!string.IsNullOrEmpty(shippingAddr.Line2))
+                    {
+                        @shippingAddr.Line2<br />
+                    }
+                    @shippingAddr.City, @shippingAddr.State @shippingAddr.PostalCode<br />
+                    @shippingAddr.Country
+                </address>
+            }
+
+            <h5>Billing Address</h5>
+            @if (_customer.BillingUsesShipping)
+            {
+                <span class="badge bg-secondary">Same as shipping address</span>
+            }
+            else if (billingAddr is not null)
+            {
+                <address>
+                    @billingAddr.Line1<br />
+                    @if (!string.IsNullOrEmpty(billingAddr.Line2))
+                    {
+                        @billingAddr.Line2<br />
+                    }
+                    @billingAddr.City, @billingAddr.State @billingAddr.PostalCode<br />
+                    @billingAddr.Country
+                </address>
+            }
+            else
+            {
+                <p class="text-muted">Billing address not set.
+                    <AuthorizeView Roles="FarmAdmin">
+                        <Authorized>
+                            <a href="/customers/@_customer.Id/edit">Add billing address</a>
+                        </Authorized>
+                    </AuthorizeView>
+                </p>
+            }
+        </div>
+    </div>
+
+    @if (_customer.Contacts.Any())
+    {
+        <h5>Contacts</h5>
+        <table class="table table-sm">
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Role</th>
+                    <th>Email</th>
+                    <th>Phone</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var contact in _customer.Contacts)
+                {
+                    <tr>
+                        <td>@contact.FirstName @contact.LastName @(contact.IsPrimary ? "(Primary)" : "")</td>
+                        <td>@contact.Role</td>
+                        <td>@contact.Email</td>
+                        <td>@(contact.Phone ?? contact.Mobile)</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+
+    @if (_customer.Addresses.Any())
+    {
+        <h5>All Addresses</h5>
+        <table class="table table-sm">
+            <thead>
+                <tr>
+                    <th>Label</th>
+                    <th>Type</th>
+                    <th>Address</th>
+                    <th>Default</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var addr in _customer.Addresses)
+                {
+                    <tr>
+                        <td>@addr.Label</td>
+                        <td>@addr.Type</td>
+                        <td>@addr.Line1, @addr.City, @addr.State @addr.PostalCode</td>
+                        <td>@(addr.IsDefault ? "✓" : "")</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+
+    <div class="mt-3">
+        <a href="/customers" class="btn btn-secondary">Back to List</a>
+    </div>
+}
+
+@code {
+    [Parameter] public Guid Id { get; set; }
+    private CustomerDetail? _customer;
+    private readonly CancellationTokenSource _cts = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        _customer = await CustomerApi.GetCustomerAsync(Id, _cts.Token);
+    }
+
+    public void Dispose() => _cts.Cancel();
+}

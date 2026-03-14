@@ -1,0 +1,71 @@
+@page "/customers"
+@rendermode InteractiveServer
+@attribute [Authorize]
+@inject CustomerApiClient CustomerApi
+@implements IDisposable
+
+<PageTitle>Customers</PageTitle>
+
+<h1>Customers</h1>
+
+<AuthorizeView Roles="FarmAdmin">
+    <Authorized>
+        <a href="/customers/create" class="btn btn-primary mb-3">New Customer</a>
+    </Authorized>
+</AuthorizeView>
+
+@if (_customers is null)
+{
+    <p><em>Loading...</em></p>
+}
+else if (!_customers.Any())
+{
+    <p>No customers found.</p>
+}
+else
+{
+    <table class="table table-hover">
+        <thead>
+            <tr>
+                <th>Name</th>
+                <th>Type</th>
+                <th>Company</th>
+                <th>Email</th>
+                <th>Phone</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var c in _customers)
+            {
+                <tr>
+                    <td><a href="/customers/@c.Id">@c.DisplayName</a></td>
+                    <td>@c.Type</td>
+                    <td>@c.CompanyName</td>
+                    <td>@c.PrimaryEmail</td>
+                    <td>@c.PrimaryPhone</td>
+                    <td>
+                        <AuthorizeView Roles="FarmAdmin">
+                            <Authorized>
+                                <a href="/customers/@c.Id/edit" class="btn btn-sm btn-outline-secondary">Edit</a>
+                            </Authorized>
+                        </AuthorizeView>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+@code {
+    private CustomerSummary[]? _customers;
+    private readonly CancellationTokenSource _cts = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        _customers = await CustomerApi.GetCustomersAsync(
+            cancellationToken: _cts.Token);
+    }
+
+    public void Dispose() => _cts.Cancel();
+}
