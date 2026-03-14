@@ -11,6 +11,8 @@ namespace FarmAppAspire.Tests.Unit.Auth;
 
 public sealed class UserAdminServiceTests : IAsyncDisposable
 {
+    private const string TestPassword = "Password123";
+
     private readonly SqliteConnection _connection;
     private readonly ServiceProvider _sp;
 
@@ -62,7 +64,7 @@ public sealed class UserAdminServiceTests : IAsyncDisposable
         await using var scope = _sp.CreateAsyncScope();
         var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
         var user = new ApplicationUser { UserName = email, Email = email, EmailConfirmed = true, IsActive = true };
-        var result = await userManager.CreateAsync(user, "Password123");
+        var result = await userManager.CreateAsync(user, TestPassword);
         Assert.True(result.Succeeded, string.Join("; ", result.Errors.Select(e => e.Description)));
         await userManager.AddToRoleAsync(user, role);
         return user;
@@ -78,7 +80,7 @@ public sealed class UserAdminServiceTests : IAsyncDisposable
         await using var scope = _sp.CreateAsyncScope();
         var svc = GetService(scope);
 
-        var (success, error) = await svc.CreateUserAsync("new@test.com", "New User", "Staff", "Password123");
+        var (success, error) = await svc.CreateUserAsync("new@test.com", "New User", "Staff", TestPassword);
 
         Assert.True(success);
         Assert.Null(error);
@@ -194,6 +196,7 @@ public sealed class UserAdminServiceTests : IAsyncDisposable
         Assert.True(success);
         Assert.Null(error);
         Assert.NotEmpty(tempPassword);
+        Assert.True(tempPassword.Length >= 8, $"Temp password '{tempPassword}' is too short.");
 
         // Verify the temp password actually works
         var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
