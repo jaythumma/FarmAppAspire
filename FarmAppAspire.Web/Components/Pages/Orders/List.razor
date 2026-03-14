@@ -7,7 +7,18 @@
 
 <PageTitle>Orders</PageTitle>
 
-<h1>Orders</h1>
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h1 class="mb-0">Orders</h1>
+    <a href="/orders/create" class="btn btn-primary">Add Order</a>
+</div>
+
+@if (_errorMessage is not null)
+{
+    <div class="alert alert-danger alert-dismissible" role="alert">
+        @_errorMessage
+        <button type="button" class="btn-close" @onclick="() => _errorMessage = null"></button>
+    </div>
+}
 
 <div class="row g-3 mb-4">
     <div class="col-auto">
@@ -55,6 +66,7 @@ else if (_orders is not null)
                     <th>Channel</th>
                     <th>Status</th>
                     <th>Sample</th>
+                    <th></th>
                 </tr>
             </thead>
             <tbody>
@@ -65,6 +77,15 @@ else if (_orders is not null)
                         <td>@o.Channel</td>
                         <td><span class="badge bg-secondary">@o.Status</span></td>
                         <td>@(o.IsSample ? "Yes" : "No")</td>
+                        <td class="text-end">
+                            @if (o.Status == "Pending")
+                            {
+                                <a href="/orders/@o.CustomerId/@o.Id/edit"
+                                   class="btn btn-sm btn-outline-primary me-1">Edit</a>
+                                <button class="btn btn-sm btn-outline-danger"
+                                        @onclick="() => CancelOrderAsync(o)">Cancel</button>
+                            }
+                        </td>
                     </tr>
                 }
             </tbody>
@@ -77,6 +98,7 @@ else if (_orders is not null)
     private OrderSummary[]? _orders;
     private string _selectedCustomerId = "";
     private string _statusFilter = "";
+    private string? _errorMessage;
     private bool _loading;
     private readonly CancellationTokenSource _cts = new();
 
@@ -94,6 +116,16 @@ else if (_orders is not null)
             _statusFilter.Length > 0 ? _statusFilter : null,
             _cts.Token);
         _loading = false;
+    }
+
+    private async Task CancelOrderAsync(OrderSummary order)
+    {
+        if (!Guid.TryParse(_selectedCustomerId, out var customerId)) return;
+        var success = await OrderApi.CancelOrderAsync(customerId, order.Id, _cts.Token);
+        if (success)
+            await LoadOrdersAsync();
+        else
+            _errorMessage = $"Failed to cancel order {order.Id}.";
     }
 
     public void Dispose() => _cts.Cancel();

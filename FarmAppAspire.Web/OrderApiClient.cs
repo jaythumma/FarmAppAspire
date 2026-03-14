@@ -37,7 +37,12 @@ public class OrderApiClient(HttpClient httpClient)
     {
         var response = await httpClient.PostAsJsonAsync(
             $"/customers/{customerId}/fedex-orders", request, JsonOptions, cancellationToken);
-        if (!response.IsSuccessStatusCode) return null;
+        if (!response.IsSuccessStatusCode)
+        {
+            var body = await response.Content.ReadAsStringAsync(cancellationToken);
+            throw new HttpRequestException(
+                $"HTTP {(int)response.StatusCode}: {body}", null, response.StatusCode);
+        }
         return await response.Content.ReadFromJsonAsync<OrderDetail>(JsonOptions, cancellationToken);
     }
 
@@ -62,7 +67,7 @@ public enum FedExTierSize { OneOz, TwoOz, FourOz, EightOz, OneLb, TwoLb, ThreeLb
 
 public record FedExTierInfo(string TierSize, decimal WeightOz, decimal FixedPrice);
 public record FedExOrderLineRequest(FedExTierSize TierSize, int Qty);
-public record CreateFedExOrderRequest(Guid? ContactId, IReadOnlyList<FedExOrderLineRequest> Lines);
+public record CreateFedExOrderRequest(Guid? ContactId, IReadOnlyList<FedExOrderLineRequest> Lines, DateTime? WeekOf = null, bool IsSample = false);
 public record UpdateOrderRequest(Guid? ContactId, bool IsSample);
 
 public record OrderSummary(Guid Id, Guid CustomerId, string Channel, string Status, DateTime WeekOf, bool IsSample);
