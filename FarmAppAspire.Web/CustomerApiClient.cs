@@ -58,16 +58,17 @@ public class CustomerApiClient(HttpClient httpClient)
 }
 
 public enum CustomerType { Wholesale, Retail }
+public enum ChannelType { Direct, Amazon }
 public enum PaymentTerms { NET30, NET60, COD, Prepaid, Other }
 public enum ContactRole { Primary, Billing, Purchasing, Shipping, Secondary, Other }
 public enum AddressType { Billing, Shipping, Both }
 
 public record PagedResult<T>(int Total, int Page, int Size, T[] Items);
 
-public record CustomerSummary(Guid Id, CustomerType Type, string DisplayName, string? CompanyName, string? PrimaryEmail, string? PrimaryPhone);
+public record CustomerSummary(Guid Id, CustomerType Type, ChannelType ChannelType, string DisplayName, string? CompanyName, string? PrimaryEmail, string? PrimaryPhone);
 
 public record CustomerDetail(
-    Guid Id, CustomerType Type, string DisplayName,
+    Guid Id, CustomerType Type, ChannelType ChannelType, string DisplayName,
     string? CompanyName, string? TaxId, PaymentTerms? PaymentTerms,
     string? PrimaryEmail, string? PrimaryPhone, string? Notes,
     DateTime CreatedAt, string CreatedBy, DateTime? ModifiedAt, string? ModifiedBy,
@@ -97,7 +98,8 @@ public record CreateCustomerRequest(
     string? Notes,
     AddressFields ShippingAddress,
     bool BillingUsesShipping = true,
-    AddressFields? BillingAddress = null);
+    AddressFields? BillingAddress = null,
+    ChannelType ChannelType = ChannelType.Direct);
 
 public record UpdateCustomerRequest(
     string DisplayName,
@@ -107,7 +109,8 @@ public record UpdateCustomerRequest(
     string? PrimaryEmail,
     string? PrimaryPhone,
     string? Notes,
-    bool? BillingUsesShipping = null);
+    bool? BillingUsesShipping = null,
+    ChannelType ChannelType = ChannelType.Direct);
 
 public record CreateAddressRequest(
     string Label,

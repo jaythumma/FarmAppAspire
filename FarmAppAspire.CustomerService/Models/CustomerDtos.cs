@@ -4,12 +4,12 @@ namespace FarmAppAspire.CustomerService.Models;
 
 // ── Summary (list view) ──────────────────────────────────────────────────────
 public record CustomerSummaryDto(
-    Guid Id, CustomerType Type, string DisplayName,
+    Guid Id, CustomerType Type, ChannelType ChannelType, string DisplayName,
     string? CompanyName, string? PrimaryEmail, string? PrimaryPhone);
 
 // ── Detail (single customer with children) ───────────────────────────────────
 public record CustomerDetailDto(
-    Guid Id, CustomerType Type, string DisplayName,
+    Guid Id, CustomerType Type, ChannelType ChannelType, string DisplayName,
     string? CompanyName, string? TaxId, PaymentTerms? PaymentTerms,
     string? PrimaryEmail, string? PrimaryPhone, string? Notes,
     DateTime CreatedAt, string CreatedBy, DateTime? ModifiedAt, string? ModifiedBy,
@@ -45,13 +45,15 @@ public record CreateCustomerRequest(
     string? PrimaryEmail, string? PrimaryPhone, string? Notes,
     [Required] AddressFields ShippingAddress,
     bool BillingUsesShipping = true,
-    AddressFields? BillingAddress = null);
+    AddressFields? BillingAddress = null,
+    ChannelType ChannelType = ChannelType.Direct);
 
 public record UpdateCustomerRequest(
     [Required, MinLength(1)] string DisplayName,
     string? CompanyName, string? TaxId, PaymentTerms? PaymentTerms,
     string? PrimaryEmail, string? PrimaryPhone, string? Notes,
-    bool? BillingUsesShipping = null);
+    bool? BillingUsesShipping = null,
+    ChannelType ChannelType = ChannelType.Direct);
 
 public record CreateContactRequest(
     [Required] ContactRole Role,
@@ -91,7 +93,7 @@ public record UpdateAddressRequest(
 public static class CustomerMappings
 {
     public static CustomerDetailDto ToDetailDto(this Customer c) => new(
-        c.Id, c.Type, c.DisplayName, c.CompanyName, c.TaxId, c.PaymentTerms,
+        c.Id, c.Type, c.ChannelType, c.DisplayName, c.CompanyName, c.TaxId, c.PaymentTerms,
         c.PrimaryEmail, c.PrimaryPhone, c.Notes,
         c.CreatedAt, c.CreatedBy, c.ModifiedAt, c.ModifiedBy,
         c.BillingUsesShipping,
@@ -101,7 +103,7 @@ public static class CustomerMappings
         c.Addresses.Select(x => x.ToDto()).OrderByDescending(x => x.IsDefault));
 
     public static CustomerSummaryDto ToSummaryDto(this Customer c) => new(
-        c.Id, c.Type, c.DisplayName, c.CompanyName, c.PrimaryEmail, c.PrimaryPhone);
+        c.Id, c.Type, c.ChannelType, c.DisplayName, c.CompanyName, c.PrimaryEmail, c.PrimaryPhone);
 
     public static ContactDto ToDto(this CustomerContact c) => new(
         c.Id, c.Role, c.FirstName, c.LastName, c.Email, c.Phone, c.Mobile, c.IsPrimary);

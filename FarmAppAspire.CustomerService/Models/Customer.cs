@@ -4,6 +4,7 @@ public class Customer
 {
     public Guid Id { get; set; }
     public CustomerType Type { get; set; }
+    public ChannelType ChannelType { get; set; } = ChannelType.Direct;
     public string DisplayName { get; set; } = string.Empty;
     public string? PrimaryEmail { get; set; }
     public string? PrimaryPhone { get; set; }
