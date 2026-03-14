@@ -122,6 +122,25 @@ public static class StandingOrderEndpoints
             return Results.Ok(ToDto(so, boxConfigs, overrides));
         }).Produces<StandingOrderDto>();
 
+        g.MapPatch("/{soId:guid}/contact", async (Guid customerId, Guid soId,
+            UpdateStandingOrderContactRequest req, CustomerDbContext db, HttpContext ctx) =>
+        {
+            var so = await db.StandingOrders
+                .FirstOrDefaultAsync(s => s.Id == soId && s.CustomerId == customerId);
+            if (so is null) return Results.NotFound();
+
+            if (req.ContactId.HasValue &&
+                !await db.CustomerContacts.AnyAsync(c => c.Id == req.ContactId && c.CustomerId == customerId))
+                return Results.BadRequest("ContactId does not belong to this customer.");
+
+            so.ContactId  = req.ContactId;
+            so.ModifiedAt = DateTime.UtcNow;
+            so.ModifiedBy = ctx.Request.Headers["X-User-Id"].FirstOrDefault();
+
+            await db.SaveChangesAsync();
+            return Results.NoContent();
+        }).Produces(StatusCodes.Status204NoContent);
+
         g.MapPost("/{soId:guid}/pause", async (Guid customerId, Guid soId, CustomerDbContext db, HttpContext ctx) =>
         {
             var so = await db.StandingOrders.FirstOrDefaultAsync(s => s.Id == soId && s.CustomerId == customerId);

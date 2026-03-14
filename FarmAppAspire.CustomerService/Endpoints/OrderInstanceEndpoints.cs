@@ -71,6 +71,29 @@ public static class OrderInstanceEndpoints
             return Results.Ok(ToDto(instance));
         });
 
+        g.MapPatch("/{instanceId:guid}", async (Guid customerId, Guid instanceId,
+            UpdateOrderInstanceRequest req, CustomerDbContext db, HttpContext ctx) =>
+        {
+            var instance = await db.OrderInstances
+                .FirstOrDefaultAsync(i => i.Id == instanceId && i.CustomerId == customerId);
+            if (instance is null) return Results.NotFound();
+
+            if (instance.Status != OrderInstanceStatus.Pending)
+                return Results.UnprocessableEntity("Only Pending orders can be edited.");
+
+            if (req.ContactId.HasValue &&
+                !await db.CustomerContacts.AnyAsync(c => c.Id == req.ContactId && c.CustomerId == customerId))
+                return Results.BadRequest("ContactId does not belong to this customer.");
+
+            instance.ContactId  = req.ContactId;
+            instance.IsSample   = req.IsSample;
+            instance.ModifiedAt = DateTime.UtcNow;
+            instance.ModifiedBy = ctx.Request.Headers["X-User-Id"].FirstOrDefault();
+
+            await db.SaveChangesAsync();
+            return Results.Ok(ToDto(instance));
+        }).Produces<OrderInstanceDto>();
+
         g.MapPost("/{instanceId:guid}/cancel", async (Guid customerId, Guid instanceId,
             CustomerDbContext db, HttpContext ctx) =>
         {
