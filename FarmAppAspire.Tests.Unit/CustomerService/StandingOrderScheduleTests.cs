@@ -26,18 +26,21 @@ public class StandingOrderScheduleTests
     [Fact]
     public void BiWeekly_SkipDisruptsRhythm_ResumesFromSkippedWeek()
     {
-        // Ship W1, skip W3 (customer requested), resume from W3 → next ship W3+2=W5
+        // W1 ships; W3 is the next biweekly slot but is skipped by the customer.
+        // Resume point = W4 (Monday immediately after skip). Per spec, the cadence
+        // restarts biweekly from the resume point → first ship at W6 (W3+3), NOT W5 (W3+2).
         var start = new DateTime(2024, 6, 3);
-        var w1 = start;
-        var w3 = start.AddDays(14);
-        var w4 = start.AddDays(21);
-        var w5 = start.AddDays(28);
+        var w3 = start.AddDays(14); // skipped week
+        var w4 = start.AddDays(21); // resume point (W+1)
+        var w5 = start.AddDays(28); // W+2 — must NOT ship
+        var w6 = start.AddDays(35); // W+3 — must ship (biweekly from resume point)
 
-        // After skipping w3, last shipped was w1. Next biweekly from resume point w3+1wk = w4 becomes new anchor
         Assert.False(StandingOrderScheduleService.ShouldGenerateForWeek(
-            OrderFrequency.BiWeekly, start, skippedWeeks: [w3], lastShippedWeek: w1, weekOf: w4));
+            OrderFrequency.BiWeekly, start, skippedWeeks: [w3], lastShippedWeek: null, weekOf: w4));
+        Assert.False(StandingOrderScheduleService.ShouldGenerateForWeek(
+            OrderFrequency.BiWeekly, start, skippedWeeks: [w3], lastShippedWeek: null, weekOf: w5));
         Assert.True(StandingOrderScheduleService.ShouldGenerateForWeek(
-            OrderFrequency.BiWeekly, start, skippedWeeks: [w3], lastShippedWeek: w1, weekOf: w5));
+            OrderFrequency.BiWeekly, start, skippedWeeks: [w3], lastShippedWeek: null, weekOf: w6));
     }
 
     // ── Monthly nth-Monday ─────────────────────────────────────────────────────
@@ -65,6 +68,29 @@ public class StandingOrderScheduleTests
         Assert.False(StandingOrderScheduleService.ShouldGenerateForWeek(
             OrderFrequency.Monthly, start, skippedWeeks: [], lastShippedWeek: null,
             weekOf: secondMonday, monthlyWeek: MonthlyWeek.First));
+    }
+
+    // ── OnRequest ─────────────────────────────────────────────────────────────
+
+    [Fact]
+    public void OnRequest_ReturnsTrue_WhenStatusIsActive()
+    {
+        // OnRequest orders participate in the normal generate-instances cycle when Active.
+        // The caller (AdminEndpoints) sets the standing order back to Paused after generating.
+        var start = new DateTime(2024, 6, 3);
+        var weekOf = start.AddDays(7);
+        Assert.True(StandingOrderScheduleService.ShouldGenerateForWeek(
+            OrderFrequency.OnRequest, start, skippedWeeks: [], lastShippedWeek: null, weekOf: weekOf));
+    }
+
+    // ── Stopped ───────────────────────────────────────────────────────────────
+
+    [Fact]
+    public void Stopped_NeverGenerates()
+    {
+        var start = new DateTime(2024, 6, 3);
+        Assert.False(StandingOrderScheduleService.ShouldGenerateForWeek(
+            OrderFrequency.Stopped, start, skippedWeeks: [], lastShippedWeek: null, weekOf: start));
     }
 
     // ── Invoice label ──────────────────────────────────────────────────────────

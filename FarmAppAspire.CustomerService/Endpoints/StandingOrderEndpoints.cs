@@ -181,13 +181,10 @@ public static class StandingOrderEndpoints
             var so = await db.StandingOrders.FirstOrDefaultAsync(s => s.Id == soId && s.CustomerId == customerId);
             if (so is null) return Results.NotFound();
 
-            // Friday cutoff check: for Monday W, cutoff = Friday of that week
+            // Friday cutoff: skip requests must arrive before end-of-day Friday
+            // of the harvest week (weekMonday - 3 days = the preceding Friday).
             var weekMonday = SeasonYearService.MondayOf(req.WeekOf);
-            var friday = weekMonday.AddDays(-3); // Thursday+1 = Friday before the Monday
-            // Actually: Mon - 3 days = Friday of PRIOR week. Skip cutoff is Friday of SAME week.
-            // Mon = D7 of harvest week, skip cutoff = D5 (Friday of that same week)
-            // weekMonday is the Monday being skipped. Friday of that week = weekMonday - 3.
-            var cutoff = weekMonday.AddDays(-3); // Friday before the Monday
+            var cutoff = weekMonday.AddDays(-3);
             if (DateTime.UtcNow.Date > cutoff.Date)
                 return Results.UnprocessableEntity("Skip cutoff has passed. Order will be shipped as scheduled.");
 
