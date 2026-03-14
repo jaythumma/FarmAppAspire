@@ -14,6 +14,8 @@ public record CustomerDetailDto(
     string? PrimaryEmail, string? PrimaryPhone, string? Notes,
     DateTime CreatedAt, string CreatedBy, DateTime? ModifiedAt, string? ModifiedBy,
     bool BillingUsesShipping,
+    string? CustomerKey,
+    bool CustomerKeyCollision,
     IEnumerable<ContactDto> Contacts,
     IEnumerable<AddressDto> Addresses);
 
@@ -93,6 +95,8 @@ public static class CustomerMappings
         c.PrimaryEmail, c.PrimaryPhone, c.Notes,
         c.CreatedAt, c.CreatedBy, c.ModifiedAt, c.ModifiedBy,
         c.BillingUsesShipping,
+        c.CustomerKey,
+        c.CustomerKeyCollision,
         c.Contacts.Select(x => x.ToDto()).OrderByDescending(x => x.IsPrimary),
         c.Addresses.Select(x => x.ToDto()).OrderByDescending(x => x.IsDefault));
 
