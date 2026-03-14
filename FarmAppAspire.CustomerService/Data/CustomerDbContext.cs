@@ -28,6 +28,7 @@ public class CustomerDbContext : DbContext
         {
             e.HasKey(c => c.Id);
             e.Property(c => c.Type).HasConversion<string>();
+            e.Property(c => c.ChannelType).HasConversion<string>();
             e.Property(c => c.PaymentTerms).HasConversion<string>();
             e.HasMany(c => c.Contacts)
                 .WithOne(x => x.Customer)

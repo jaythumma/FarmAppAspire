@@ -12,8 +12,8 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace FarmAppAspire.CustomerService.Migrations
 {
     [DbContext(typeof(CustomerDbContext))]
-    [Migration("20260312213644_OrderManagement")]
-    partial class OrderManagement
+    [Migration("20260314233055_InitialCreate")]
+    partial class InitialCreate
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -33,6 +33,10 @@ namespace FarmAppAspire.CustomerService.Migrations
 
                     b.Property<bool>("BillingUsesShipping")
                         .HasColumnType("boolean");
+
+                    b.Property<string>("ChannelType")
+                        .IsRequired()
+                        .HasColumnType("text");
 
                     b.Property<string>("CompanyName")
                         .HasColumnType("text");

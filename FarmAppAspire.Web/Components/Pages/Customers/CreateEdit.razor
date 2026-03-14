@@ -24,6 +24,14 @@
     </div>
 
     <div class="mb-3">
+        <label class="form-label">Channel</label>
+        <InputSelect @bind-Value="_model.ChannelType" class="form-select">
+            <option value="Direct">Direct</option>
+            <option value="Amazon">Amazon</option>
+        </InputSelect>
+    </div>
+
+    <div class="mb-3">
         <label class="form-label">Display Name *</label>
         <InputText @bind-Value="_model.DisplayName" class="form-control" />
         <ValidationMessage For="() => _model.DisplayName" />
@@ -182,6 +190,7 @@
             if (_existing is not null)
             {
                 _model.Type = _existing.Type;
+                _model.ChannelType = _existing.ChannelType;
                 _model.DisplayName = _existing.DisplayName;
                 _model.PrimaryEmail = _existing.PrimaryEmail;
                 _model.PrimaryPhone = _existing.PrimaryPhone;
@@ -240,7 +249,8 @@
                     PrimaryEmail: _model.PrimaryEmail,
                     PrimaryPhone: _model.PrimaryPhone,
                     Notes: null,
-                    BillingUsesShipping: _model.BillingUsesShipping);
+                    BillingUsesShipping: _model.BillingUsesShipping,
+                    ChannelType: _model.ChannelType);
                 await CustomerApi.UpdateCustomerAsync(Id.Value, updateReq, _cts.Token);
 
                 if (HasCompleteBillingAddress())
@@ -313,7 +323,8 @@
                         _model.ShippingPostalCode,
                         _model.ShippingCountry),
                     BillingUsesShipping: _model.BillingUsesShipping,
-                    BillingAddress: billingAddress);
+                    BillingAddress: billingAddress,
+                    ChannelType: _model.ChannelType);
 
                 var created = await CustomerApi.CreateCustomerAsync(createReq, _cts.Token);
                 if (created is not null)
@@ -332,6 +343,8 @@
     {
         [Required]
         public CustomerType Type { get; set; } = CustomerType.Retail;
+
+        public ChannelType ChannelType { get; set; } = ChannelType.Direct;
 
         [Required]
         public string DisplayName { get; set; } = string.Empty;

@@ -90,6 +90,7 @@ customers.MapPost("", async (CreateCustomerRequest req, CustomerDbContext db, Ht
     {
         Id = Guid.NewGuid(),
         Type = req.Type,
+        ChannelType = req.ChannelType,
         DisplayName = req.DisplayName,
         CompanyName = req.CompanyName,
         TaxId = req.TaxId,
@@ -161,6 +162,7 @@ customers.MapPut("{id:guid}", async (Guid id, UpdateCustomerRequest req, Custome
     c.PrimaryEmail = req.PrimaryEmail;
     c.PrimaryPhone = req.PrimaryPhone;
     c.Notes = req.Notes;
+    c.ChannelType = req.ChannelType;
     if (req.BillingUsesShipping.HasValue)
         c.BillingUsesShipping = req.BillingUsesShipping.Value;
     c.ModifiedAt = DateTime.UtcNow;

@@ -8,44 +8,36 @@ using Microsoft.EntityFrameworkCore.Migrations;
 namespace FarmAppAspire.CustomerService.Migrations
 {
     /// <inheritdoc />
-    public partial class OrderManagement : Migration
+    public partial class InitialCreate : Migration
     {
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
-            migrationBuilder.AddColumn<string>(
-                name: "CustomerKey",
-                table: "Customers",
-                type: "text",
-                nullable: true);
-
-            migrationBuilder.AddColumn<bool>(
-                name: "CustomerKeyCollision",
-                table: "Customers",
-                type: "boolean",
-                nullable: false,
-                defaultValue: false);
-
             migrationBuilder.CreateTable(
-                name: "CustomerPricings",
+                name: "Customers",
                 columns: table => new
                 {
                     Id = table.Column<Guid>(type: "uuid", nullable: false),
-                    CustomerId = table.Column<Guid>(type: "uuid", nullable: false),
-                    BoxSize = table.Column<string>(type: "text", nullable: false),
-                    PricePerLb = table.Column<decimal>(type: "numeric", nullable: false),
-                    ShippingRate = table.Column<decimal>(type: "numeric", nullable: true),
-                    MinQty = table.Column<int>(type: "integer", nullable: false)
+                    Type = table.Column<string>(type: "text", nullable: false),
+                    ChannelType = table.Column<string>(type: "text", nullable: false),
+                    DisplayName = table.Column<string>(type: "text", nullable: false),
+                    PrimaryEmail = table.Column<string>(type: "text", nullable: true),
+                    PrimaryPhone = table.Column<string>(type: "text", nullable: true),
+                    CompanyName = table.Column<string>(type: "text", nullable: true),
+                    TaxId = table.Column<string>(type: "text", nullable: true),
+                    PaymentTerms = table.Column<string>(type: "text", nullable: true),
+                    Notes = table.Column<string>(type: "text", nullable: true),
+                    BillingUsesShipping = table.Column<bool>(type: "boolean", nullable: false),
+                    CustomerKey = table.Column<string>(type: "text", nullable: true),
+                    CustomerKeyCollision = table.Column<bool>(type: "boolean", nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    CreatedBy = table.Column<string>(type: "text", nullable: false),
+                    ModifiedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    ModifiedBy = table.Column<string>(type: "text", nullable: true)
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("PK_CustomerPricings", x => x.Id);
-                    table.ForeignKey(
-                        name: "FK_CustomerPricings_Customers_CustomerId",
-                        column: x => x.CustomerId,
-                        principalTable: "Customers",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Cascade);
+                    table.PrimaryKey("PK_Customers", x => x.Id);
                 });
 
             migrationBuilder.CreateTable(
@@ -73,6 +65,81 @@ namespace FarmAppAspire.CustomerService.Migrations
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_InsulatedBoxConfigs", x => x.Size);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "CustomerAddresses",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    CustomerId = table.Column<Guid>(type: "uuid", nullable: false),
+                    Label = table.Column<string>(type: "text", nullable: false),
+                    Type = table.Column<string>(type: "text", nullable: false),
+                    Line1 = table.Column<string>(type: "text", nullable: false),
+                    Line2 = table.Column<string>(type: "text", nullable: true),
+                    City = table.Column<string>(type: "text", nullable: false),
+                    State = table.Column<string>(type: "text", nullable: false),
+                    PostalCode = table.Column<string>(type: "text", nullable: false),
+                    Country = table.Column<string>(type: "text", nullable: false),
+                    IsDefault = table.Column<bool>(type: "boolean", nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_CustomerAddresses", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_CustomerAddresses_Customers_CustomerId",
+                        column: x => x.CustomerId,
+                        principalTable: "Customers",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "CustomerContacts",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    CustomerId = table.Column<Guid>(type: "uuid", nullable: false),
+                    Role = table.Column<string>(type: "text", nullable: false),
+                    FirstName = table.Column<string>(type: "text", nullable: false),
+                    LastName = table.Column<string>(type: "text", nullable: false),
+                    Email = table.Column<string>(type: "text", nullable: true),
+                    Phone = table.Column<string>(type: "text", nullable: true),
+                    Mobile = table.Column<string>(type: "text", nullable: true),
+                    IsPrimary = table.Column<bool>(type: "boolean", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_CustomerContacts", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_CustomerContacts_Customers_CustomerId",
+                        column: x => x.CustomerId,
+                        principalTable: "Customers",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "CustomerPricings",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    CustomerId = table.Column<Guid>(type: "uuid", nullable: false),
+                    BoxSize = table.Column<string>(type: "text", nullable: false),
+                    PricePerLb = table.Column<decimal>(type: "numeric", nullable: false),
+                    ShippingRate = table.Column<decimal>(type: "numeric", nullable: true),
+                    MinQty = table.Column<int>(type: "integer", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_CustomerPricings", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_CustomerPricings_Customers_CustomerId",
+                        column: x => x.CustomerId,
+                        principalTable: "Customers",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
                 });
 
             migrationBuilder.CreateTable(
@@ -269,6 +336,16 @@ namespace FarmAppAspire.CustomerService.Migrations
                 });
 
             migrationBuilder.CreateIndex(
+                name: "IX_CustomerAddresses_CustomerId",
+                table: "CustomerAddresses",
+                column: "CustomerId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_CustomerContacts_CustomerId",
+                table: "CustomerContacts",
+                column: "CustomerId");
+
+            migrationBuilder.CreateIndex(
                 name: "IX_CustomerPricings_CustomerId_BoxSize",
                 table: "CustomerPricings",
                 columns: new[] { "CustomerId", "BoxSize" },
@@ -338,6 +415,9 @@ namespace FarmAppAspire.CustomerService.Migrations
         protected override void Down(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.DropTable(
+                name: "CustomerAddresses");
+
+            migrationBuilder.DropTable(
                 name: "CustomerPricings");
 
             migrationBuilder.DropTable(
@@ -364,13 +444,11 @@ namespace FarmAppAspire.CustomerService.Migrations
             migrationBuilder.DropTable(
                 name: "StandingOrders");
 
-            migrationBuilder.DropColumn(
-                name: "CustomerKey",
-                table: "Customers");
+            migrationBuilder.DropTable(
+                name: "CustomerContacts");
 
-            migrationBuilder.DropColumn(
-                name: "CustomerKeyCollision",
-                table: "Customers");
+            migrationBuilder.DropTable(
+                name: "Customers");
         }
     }
 }

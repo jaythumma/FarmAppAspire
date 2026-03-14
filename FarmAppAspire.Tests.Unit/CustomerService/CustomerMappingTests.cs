@@ -10,6 +10,7 @@ public class CustomerMappingTests
     {
         Id = Guid.NewGuid(),
         Type = CustomerType.Wholesale,
+        ChannelType = ChannelType.Direct,
         DisplayName = "Test Corp",
         CompanyName = "Test Corp Ltd",
         TaxId = "TAX-123",
@@ -34,10 +35,44 @@ public class CustomerMappingTests
 
         Assert.Equal(customer.Id, dto.Id);
         Assert.Equal(customer.Type, dto.Type);
+        Assert.Equal(customer.ChannelType, dto.ChannelType);
         Assert.Equal(customer.DisplayName, dto.DisplayName);
         Assert.Equal(customer.CompanyName, dto.CompanyName);
         Assert.Equal(customer.PrimaryEmail, dto.PrimaryEmail);
         Assert.Equal(customer.PrimaryPhone, dto.PrimaryPhone);
+    }
+
+    [Fact]
+    public void ToDetailDto_MapsChannelType_Direct()
+    {
+        var customer = BuildCustomer();
+        customer.ChannelType = ChannelType.Direct;
+
+        var dto = customer.ToDetailDto();
+
+        Assert.Equal(ChannelType.Direct, dto.ChannelType);
+    }
+
+    [Fact]
+    public void ToDetailDto_MapsChannelType_Amazon()
+    {
+        var customer = BuildCustomer();
+        customer.ChannelType = ChannelType.Amazon;
+
+        var dto = customer.ToDetailDto();
+
+        Assert.Equal(ChannelType.Amazon, dto.ChannelType);
+    }
+
+    [Fact]
+    public void ToSummaryDto_MapsChannelType_Amazon()
+    {
+        var customer = BuildCustomer();
+        customer.ChannelType = ChannelType.Amazon;
+
+        var dto = customer.ToSummaryDto();
+
+        Assert.Equal(ChannelType.Amazon, dto.ChannelType);
     }
 
     [Fact]

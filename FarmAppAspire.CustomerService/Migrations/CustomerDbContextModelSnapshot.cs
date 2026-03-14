@@ -31,6 +31,10 @@ namespace FarmAppAspire.CustomerService.Migrations
                     b.Property<bool>("BillingUsesShipping")
                         .HasColumnType("boolean");
 
+                    b.Property<string>("ChannelType")
+                        .IsRequired()
+                        .HasColumnType("text");
+
                     b.Property<string>("CompanyName")
                         .HasColumnType("text");
 

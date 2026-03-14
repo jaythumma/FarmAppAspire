@@ -109,4 +109,52 @@ public class CustomerValidationTests
     private static AddressFields ValidAddress() => new(
         Line1: "1 Main St", Line2: null,
         City: "Springfield", State: "IL", PostalCode: "62701", Country: "US");
+
+    // ── ChannelType default and values ────────────────────────────────────────
+
+    [Fact]
+    public void CreateCustomerRequest_ChannelType_DefaultsToDirect()
+    {
+        var req = new CreateCustomerRequest(
+            CustomerType.Retail, "Jane",
+            null, null, null, null, null, null,
+            ShippingAddress: ValidAddress());
+
+        Assert.Equal(ChannelType.Direct, req.ChannelType);
+    }
+
+    [Fact]
+    public void CreateCustomerRequest_ChannelType_CanBeSetToAmazon()
+    {
+        var req = new CreateCustomerRequest(
+            CustomerType.Retail, "Jane",
+            null, null, null, null, null, null,
+            ShippingAddress: ValidAddress(),
+            ChannelType: ChannelType.Amazon);
+
+        Assert.Equal(ChannelType.Amazon, req.ChannelType);
+    }
+
+    [Fact]
+    public void UpdateCustomerRequest_ChannelType_DefaultsToDirect()
+    {
+        var req = new UpdateCustomerRequest(
+            DisplayName: "Jane",
+            CompanyName: null, TaxId: null, PaymentTerms: null,
+            PrimaryEmail: null, PrimaryPhone: null, Notes: null);
+
+        Assert.Equal(ChannelType.Direct, req.ChannelType);
+    }
+
+    [Fact]
+    public void UpdateCustomerRequest_ChannelType_CanBeSetToAmazon()
+    {
+        var req = new UpdateCustomerRequest(
+            DisplayName: "Jane",
+            CompanyName: null, TaxId: null, PaymentTerms: null,
+            PrimaryEmail: null, PrimaryPhone: null, Notes: null,
+            ChannelType: ChannelType.Amazon);
+
+        Assert.Equal(ChannelType.Amazon, req.ChannelType);
+    }
 }
