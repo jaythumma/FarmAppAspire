@@ -1,5 +1,6 @@
 using FarmAppAspire.Web;
 using FarmAppAspire.Web.Components;
+using FarmAppAspire.Web.Components.Layout;
 using FarmAppAspire.Web.Data;
 using Microsoft.AspNetCore.Identity;
 
@@ -49,6 +50,12 @@ builder.Services.AddHttpClient<CustomerApiClient>(client =>
     .AddHttpMessageHandler<CustomerApiClientHandler>();
 
 builder.Services.AddHttpClient<OrderApiClient>(client =>
+    {
+        client.BaseAddress = new("https+http://customerservice");
+    })
+    .AddHttpMessageHandler<CustomerApiClientHandler>();
+
+builder.Services.AddHttpClient<InvoiceApiClient>(client =>
     {
         client.BaseAddress = new("https+http://customerservice");
     })
