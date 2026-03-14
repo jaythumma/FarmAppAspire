@@ -41,6 +41,20 @@ public class CustomerApiClient(HttpClient httpClient)
         var response = await httpClient.DeleteAsync($"/customers/{id}", cancellationToken);
         return response.StatusCode == HttpStatusCode.NoContent;
     }
+
+    public async Task<AddressDto?> CreateAddressAsync(Guid customerId, CreateAddressRequest request, CancellationToken cancellationToken = default)
+    {
+        var response = await httpClient.PostAsJsonAsync($"/customers/{customerId}/addresses", request, JsonOptions, cancellationToken);
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<AddressDto>(JsonOptions, cancellationToken);
+    }
+
+    public async Task<AddressDto?> UpdateAddressAsync(Guid customerId, Guid addressId, UpdateAddressRequest request, CancellationToken cancellationToken = default)
+    {
+        var response = await httpClient.PutAsJsonAsync($"/customers/{customerId}/addresses/{addressId}", request, JsonOptions, cancellationToken);
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<AddressDto>(JsonOptions, cancellationToken);
+    }
 }
 
 public enum CustomerType { Wholesale, Retail }
@@ -94,3 +108,25 @@ public record UpdateCustomerRequest(
     string? PrimaryPhone,
     string? Notes,
     bool? BillingUsesShipping = null);
+
+public record CreateAddressRequest(
+    string Label,
+    AddressType Type,
+    string Line1,
+    string? Line2,
+    string City,
+    string State,
+    string PostalCode,
+    string Country,
+    bool IsDefault = false);
+
+public record UpdateAddressRequest(
+    string Label,
+    AddressType Type,
+    string Line1,
+    string? Line2,
+    string City,
+    string State,
+    string PostalCode,
+    string Country,
+    bool IsDefault = false);

@@ -216,6 +216,14 @@
         }
     }
 
+    private bool HasCompleteBillingAddress() =>
+        !_model.BillingUsesShipping &&
+        !string.IsNullOrWhiteSpace(_model.BillingLine1) &&
+        !string.IsNullOrWhiteSpace(_model.BillingCity) &&
+        !string.IsNullOrWhiteSpace(_model.BillingState) &&
+        !string.IsNullOrWhiteSpace(_model.BillingPostalCode) &&
+        !string.IsNullOrWhiteSpace(_model.BillingCountry);
+
     private async Task SaveAsync()
     {
         _errorMessage = null;
@@ -234,25 +242,58 @@
                     Notes: null,
                     BillingUsesShipping: _model.BillingUsesShipping);
                 await CustomerApi.UpdateCustomerAsync(Id.Value, updateReq, _cts.Token);
+
+                if (HasCompleteBillingAddress())
+                {
+                    var existingBilling = _existing?.Addresses
+                        .FirstOrDefault(a => a.Type == AddressType.Billing);
+
+                    if (existingBilling is not null)
+                    {
+                        await CustomerApi.UpdateAddressAsync(Id.Value, existingBilling.Id,
+                            new UpdateAddressRequest(
+                                Label: "Billing",
+                                Type: AddressType.Billing,
+                                Line1: _model.BillingLine1!,
+                                Line2: _model.BillingLine2,
+                                City: _model.BillingCity!,
+                                State: _model.BillingState!,
+                                PostalCode: _model.BillingPostalCode!,
+                                Country: _model.BillingCountry!,
+                                IsDefault: existingBilling.IsDefault),
+                            _cts.Token);
+                    }
+                    else
+                    {
+                        await CustomerApi.CreateAddressAsync(Id.Value,
+                            new CreateAddressRequest(
+                                Label: "Billing",
+                                Type: AddressType.Billing,
+                                Line1: _model.BillingLine1!,
+                                Line2: _model.BillingLine2,
+                                City: _model.BillingCity!,
+                                State: _model.BillingState!,
+                                PostalCode: _model.BillingPostalCode!,
+                                Country: _model.BillingCountry!,
+                                IsDefault: false),
+                            _cts.Token);
+                    }
+                }
+
                 Nav.NavigateTo($"/customers/{Id.Value}");
             }
             else
             {
                 AddressFields? billingAddress = null;
-                if (!_model.BillingUsesShipping &&
-                    !string.IsNullOrWhiteSpace(_model.BillingLine1) &&
-                    !string.IsNullOrWhiteSpace(_model.BillingCity) &&
-                    !string.IsNullOrWhiteSpace(_model.BillingState) &&
-                    !string.IsNullOrWhiteSpace(_model.BillingPostalCode) &&
-                    !string.IsNullOrWhiteSpace(_model.BillingCountry))
+                if (HasCompleteBillingAddress())
                 {
                     billingAddress = new AddressFields(
-                        _model.BillingLine1,
+                        _model.BillingLine1!,
                         _model.BillingLine2,
-                        _model.BillingCity,
-                        _model.BillingState,
-                        _model.BillingPostalCode,
-                        _model.BillingCountry);
+                        _model.BillingCity!,
+                        _model.BillingState!,
+                        _model.BillingPostalCode!,
+                        _model.BillingCountry!);
                 }
 
                 var createReq = new CreateCustomerRequest(
