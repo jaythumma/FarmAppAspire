@@ -41,6 +41,9 @@ public static class CustomerKeyEndpoints
 
         g.MapPut("/", async (Guid customerId, CustomerKeyDto req, CustomerDbContext db) =>
         {
+            if (string.IsNullOrWhiteSpace(req.CustomerKey))
+                return Results.Problem("CustomerKey is required.", statusCode: StatusCodes.Status400BadRequest);
+
             var customer = await db.Customers.FindAsync(customerId);
             if (customer is null) return Results.NotFound();
 

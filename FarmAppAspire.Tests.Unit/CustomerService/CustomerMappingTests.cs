@@ -91,6 +91,45 @@ public class CustomerMappingTests
     }
 
     [Fact]
+    public void ToDetailDto_MapsCustomerKey_WhenSet()
+    {
+        var customer = BuildCustomer();
+        customer.CustomerKey = "TES-SPR-IL";
+        customer.CustomerKeyCollision = false;
+
+        var dto = customer.ToDetailDto();
+
+        Assert.Equal("TES-SPR-IL", dto.CustomerKey);
+        Assert.False(dto.CustomerKeyCollision);
+    }
+
+    [Fact]
+    public void ToDetailDto_MapsCustomerKey_NullWhenNotSet()
+    {
+        var customer = BuildCustomer();
+        customer.CustomerKey = null;
+        customer.CustomerKeyCollision = false;
+
+        var dto = customer.ToDetailDto();
+
+        Assert.Null(dto.CustomerKey);
+        Assert.False(dto.CustomerKeyCollision);
+    }
+
+    [Fact]
+    public void ToDetailDto_MapsCustomerKeyCollision_WhenTrue()
+    {
+        var customer = BuildCustomer();
+        customer.CustomerKey = "TES-SPR-IL";
+        customer.CustomerKeyCollision = true;
+
+        var dto = customer.ToDetailDto();
+
+        Assert.Equal("TES-SPR-IL", dto.CustomerKey);
+        Assert.True(dto.CustomerKeyCollision);
+    }
+
+    [Fact]
     public void ContactToDto_MapsAllFields()
     {
         var contact = new CustomerContact
