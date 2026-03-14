@@ -2,6 +2,7 @@ using FarmAppAspire.CustomerService.Data;
 using FarmAppAspire.CustomerService.Endpoints;
 using FarmAppAspire.CustomerService.Models;
 using Microsoft.EntityFrameworkCore;
+using Scalar.AspNetCore;
 using System.Text.Json.Serialization;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -22,6 +23,8 @@ app.UseExceptionHandler();
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
+    app.MapScalarApiReference();
+    app.MapGet("/", () => Results.Redirect("/scalar/v1")).ExcludeFromDescription();
 }
 
 // ── Startup migration ────────────────────────────────────────────────────────
