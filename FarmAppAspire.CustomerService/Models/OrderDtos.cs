@@ -38,6 +38,7 @@ public record UpdateStandingOrderRequest(
     IReadOnlyList<StandingOrderLineRequest> Lines);
 
 public record AddSkipWeekRequest(DateTime WeekOf);
+public record UpdateStandingOrderContactRequest(Guid? ContactId);
 
 // ── Order instance DTOs ───────────────────────────────────────────────────────
 public record OrderInstanceLineDto(
@@ -57,6 +58,7 @@ public record OrderInstanceDto(
     DateTime CreatedAt);
 
 public record InspectOrderRequest(DateTime InspectionDate);
+public record UpdateOrderInstanceRequest(Guid? ContactId, bool IsSample);
 
 // ── FedEx order DTOs ──────────────────────────────────────────────────────────
 public record FedExOrderLineRequest(FedExTierSize TierSize, int Qty);
