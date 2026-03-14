@@ -62,7 +62,7 @@ public record UpdateOrderInstanceRequest(Guid? ContactId, bool IsSample);
 
 // ── FedEx order DTOs ──────────────────────────────────────────────────────────
 public record FedExOrderLineRequest(FedExTierSize TierSize, int Qty);
-public record CreateFedExOrderRequest(Guid? ContactId, IReadOnlyList<FedExOrderLineRequest> Lines);
+public record CreateFedExOrderRequest(Guid? ContactId, IReadOnlyList<FedExOrderLineRequest> Lines, DateTime? WeekOf = null, bool IsSample = false);
 
 // ── Invoice DTOs ──────────────────────────────────────────────────────────────
 public record InvoiceDto(

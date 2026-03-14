@@ -7,6 +7,10 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Content Remove="Components\Pages\Admin\Orders.razor" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\FarmAppAspire.ServiceDefaults\FarmAppAspire.ServiceDefaults.csproj" />
   </ItemGroup>
 

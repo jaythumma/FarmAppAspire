@@ -68,8 +68,10 @@ public static class FedExOrderEndpoints
                 ContactId  = req.ContactId,
                 Channel   = OrderChannel.FedEx,
                 Status    = OrderInstanceStatus.Pending,
-                WeekOf    = DateTime.UtcNow.Date,
-                IsSample  = false,
+                WeekOf    = req.WeekOf.HasValue
+                    ? DateTime.SpecifyKind(req.WeekOf.Value.Date, DateTimeKind.Utc)
+                    : DateTime.UtcNow.Date,
+                IsSample  = req.IsSample,
                 CreatedAt = DateTime.UtcNow,
                 CreatedBy = userId,
                 Lines     = lines

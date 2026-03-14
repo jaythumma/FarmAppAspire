@@ -1,0 +1,253 @@
+@page "/orders/create"
+@page "/orders/{customerId:guid}/{orderId:guid}/edit"
+@rendermode InteractiveServer
+@attribute [Authorize]
+@inject CustomerApiClient CustomerApi
+@inject OrderApiClient OrderApi
+@inject NavigationManager Nav
+@implements IDisposable
+
+<PageTitle>@(IsEdit ? "Edit Order" : "New Order")</PageTitle>
+
+<h1>@(IsEdit ? "Edit Order" : "New Order")</h1>
+
+@if (_errorMessage is not null)
+{
+    <div class="alert alert-danger alert-dismissible" role="alert">
+        @_errorMessage
+        <button type="button" class="btn-close" @onclick="() => _errorMessage = null"></button>
+    </div>
+}
+
+@if (_loading)
+{
+    <p><em>Loading...</em></p>
+}
+else
+{
+    <EditForm Model="_model" OnValidSubmit="SaveAsync">
+        <DataAnnotationsValidator />
+
+        @if (!IsEdit)
+        {
+            <div class="mb-3">
+                <label class="form-label fw-semibold">Customer *</label>
+                <select class="form-select" value="@_model.CustomerId"
+                        @onchange="OnCustomerChangedAsync">
+                    <option value="">— select customer —</option>
+                    @foreach (var c in _customers)
+                    {
+                        <option value="@c.Id">@c.DisplayName</option>
+                    }
+                </select>
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label fw-semibold">Week Of *</label>
+                <InputDate @bind-Value="_model.WeekOf" class="form-control" />
+            </div>
+        }
+        else
+        {
+            <dl class="row mb-3">
+                <dt class="col-sm-3">Customer</dt>
+                <dd class="col-sm-9">@_existingOrder?.CustomerId</dd>
+                <dt class="col-sm-3">Week Of</dt>
+                <dd class="col-sm-9">@_existingOrder?.WeekOf.ToString("MMM d, yyyy")</dd>
+                <dt class="col-sm-3">Channel</dt>
+                <dd class="col-sm-9">@_existingOrder?.Channel</dd>
+                <dt class="col-sm-3">Status</dt>
+                <dd class="col-sm-9"><span class="badge bg-secondary">@_existingOrder?.Status</span></dd>
+            </dl>
+        }
+
+        <div class="mb-3">
+            <label class="form-label fw-semibold">Contact</label>
+            <select class="form-select" @bind="_model.ContactId">
+                <option value="">— none —</option>
+                @foreach (var c in _contacts)
+                {
+                    <option value="@c.Id">@c.FirstName @c.LastName (@c.Role)</option>
+                }
+            </select>
+        </div>
+
+        <div class="mb-3 form-check">
+            <InputCheckbox @bind-Value="_model.IsSample" class="form-check-input" id="isSample" />
+            <label class="form-check-label" for="isSample">Sample order</label>
+        </div>
+
+        @if (!IsEdit)
+        {
+            <h5>Order Lines</h5>
+            @foreach (var (line, idx) in _model.Lines.Select((l, i) => (l, i)))
+            {
+                <div class="row g-2 mb-2 align-items-center">
+                    <div class="col-auto">
+                        <label class="form-label visually-hidden">Tier</label>
+                        <select class="form-select" @bind="line.TierSize">
+                            <option value="">— select tier —</option>
+                            @foreach (var tier in _tiers)
+                            {
+                                <option value="@tier.TierSize">@tier.TierSize (@tier.WeightOz oz – $@tier.FixedPrice.ToString("0.00"))</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="col-2">
+                        <label class="form-label visually-hidden">Qty</label>
+                        <InputNumber @bind-Value="line.Qty" class="form-control" placeholder="Qty" min="1" />
+                    </div>
+                    <div class="col-auto">
+                        @if (_model.Lines.Count > 1)
+                        {
+                            <button type="button" class="btn btn-outline-danger btn-sm"
+                                    @onclick="() => RemoveLine(idx)">Remove</button>
+                        }
+                    </div>
+                </div>
+            }
+            <button type="button" class="btn btn-outline-secondary btn-sm mb-3"
+                    @onclick="AddLine">+ Add Line</button>
+        }
+
+        <div class="mt-3 d-flex gap-2">
+            <button type="submit" class="btn btn-primary" disabled="@_saving">
+                @(_saving ? "Saving…" : "Save")
+            </button>
+            <a href="/orders" class="btn btn-secondary">Cancel</a>
+        </div>
+    </EditForm>
+}
+
+@code {
+    [Parameter] public Guid? CustomerId { get; set; }
+    [Parameter] public Guid? OrderId { get; set; }
+
+    private bool IsEdit => OrderId.HasValue;
+
+    private readonly FormModel _model = new();
+    private CustomerSummary[] _customers = [];
+    private ContactDto[] _contacts = [];
+    private FedExTierInfo[] _tiers = [];
+    private OrderDetail? _existingOrder;
+    private string? _errorMessage;
+    private bool _loading = true;
+    private bool _saving;
+    private readonly CancellationTokenSource _cts = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        _customers = await CustomerApi.GetCustomersAsync(cancellationToken: _cts.Token);
+        _tiers = await OrderApi.GetFedExTiersAsync(_cts.Token);
+
+        if (IsEdit && CustomerId.HasValue && OrderId.HasValue)
+        {
+            _existingOrder = await OrderApi.GetOrderAsync(CustomerId.Value, OrderId.Value, _cts.Token);
+            if (_existingOrder is not null)
+            {
+                _model.IsSample = _existingOrder.IsSample;
+                _model.ContactId = _existingOrder.ContactId?.ToString();
+                await LoadContactsAsync(CustomerId.Value);
+            }
+        }
+
+        _loading = false;
+    }
+
+    private async Task OnCustomerChangedAsync(ChangeEventArgs e)
+    {
+        _model.CustomerId = e.Value?.ToString() ?? "";
+        _contacts = [];
+        if (Guid.TryParse(_model.CustomerId, out var id))
+            await LoadContactsAsync(id);
+    }
+
+    private async Task LoadContactsAsync(Guid customerId)
+    {
+        var detail = await CustomerApi.GetCustomerAsync(customerId, _cts.Token);
+        _contacts = detail?.Contacts ?? [];
+    }
+
+    private void AddLine() => _model.Lines.Add(new LineModel());
+    private void RemoveLine(int idx) => _model.Lines.RemoveAt(idx);
+
+    private async Task SaveAsync()
+    {
+        _errorMessage = null;
+        _saving = true;
+
+        try
+        {
+            if (IsEdit && CustomerId.HasValue && OrderId.HasValue)
+            {
+                Guid? contactId = Guid.TryParse(_model.ContactId, out var cid) ? cid : null;
+                var success = await OrderApi.PatchOrderAsync(
+                    CustomerId.Value, OrderId.Value,
+                    new UpdateOrderRequest(contactId, _model.IsSample),
+                    _cts.Token);
+
+                if (success)
+                    Nav.NavigateTo("/orders");
+                else
+                    _errorMessage = "Failed to update order.";
+            }
+            else
+            {
+                if (!Guid.TryParse(_model.CustomerId, out var customerId))
+                {
+                    _errorMessage = "Please select a customer.";
+                    return;
+                }
+
+                var invalidLines = _model.Lines.Where(l => string.IsNullOrEmpty(l.TierSize) || l.Qty < 1).ToList();
+                if (invalidLines.Count > 0)
+                {
+                    _errorMessage = "All lines must have a tier selected and quantity of at least 1.";
+                    return;
+                }
+
+                Guid? contactId = Guid.TryParse(_model.ContactId, out var cid) ? cid : null;
+                var lines = _model.Lines
+                    .Select(l => new FedExOrderLineRequest(Enum.Parse<FedExTierSize>(l.TierSize), l.Qty))
+                    .ToList();
+
+                var result = await OrderApi.CreateFedExOrderAsync(
+                    customerId,
+                    new CreateFedExOrderRequest(contactId, lines, _model.WeekOf, _model.IsSample),
+                    _cts.Token);
+
+                if (result is not null)
+                    Nav.NavigateTo("/orders");
+            }
+        }
+        catch (HttpRequestException ex)
+        {
+            _errorMessage = $"Failed to save order: {ex.Message}";
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"Unexpected error: {ex.Message}";
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    public void Dispose() => _cts.Cancel();
+
+    private class FormModel
+    {
+        public string CustomerId { get; set; } = "";
+        public DateTime WeekOf { get; set; } = DateTime.Today;
+        public bool IsSample { get; set; }
+        public string? ContactId { get; set; }
+        public List<LineModel> Lines { get; set; } = [new LineModel()];
+    }
+
+    private class LineModel
+    {
+        public string TierSize { get; set; } = "";
+        public int Qty { get; set; } = 1;
+    }
+}
