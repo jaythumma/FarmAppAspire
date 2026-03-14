@@ -21,8 +21,8 @@ public sealed class IdentitySeederTests : IAsyncDisposable
 
         _sp = BuildServiceProvider(new Dictionary<string, string?>
         {
-            ["FARM_ADMIN_EMAIL"] = "admin@test.com",
-            ["FARM_ADMIN_PASSWORD"] = "admin123"
+            ["FarmAdmin:Email"] = "admin@test.com",
+            ["FarmAdmin:Password"] = "admin123"
         });
     }
 
@@ -114,8 +114,8 @@ public sealed class IdentitySeederTests : IAsyncDisposable
         // Build a fresh seeder with different admin credentials
         var altSp = BuildServiceProvider(new Dictionary<string, string?>
         {
-            ["FARM_ADMIN_EMAIL"] = "newadmin@test.com",
-            ["FARM_ADMIN_PASSWORD"] = "newadmin123"
+            ["FarmAdmin:Email"] = "newadmin@test.com",
+            ["FarmAdmin:Password"] = "newadmin123"
         });
 
         // Run seeder again — there are already users so it should skip user creation

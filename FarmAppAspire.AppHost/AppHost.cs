@@ -10,9 +10,6 @@ var customerDb = builder.AddPostgres("customer-db")
     .WithDataVolume()
     .WithPgAdmin();
 
-var apiService = builder.AddProject<Projects.FarmAppAspire_ApiService>("apiservice")
-    .WithHttpHealthCheck("/health");
-
 var customerService = builder.AddProject<Projects.FarmAppAspire_CustomerService>("customerservice")
     .WithHttpHealthCheck("/health")
     .WithReference(customerDb)
@@ -23,8 +20,6 @@ builder.AddProject<Projects.FarmAppAspire_Web>("webfrontend")
     .WithHttpHealthCheck("/health")
     .WithReference(cache)
     .WaitFor(cache)
-    .WithReference(apiService)
-    .WaitFor(apiService)
     .WithReference(identityDb)
     .WaitFor(identityDb)
     .WithReference(customerService)

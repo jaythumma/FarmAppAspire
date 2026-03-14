@@ -7,13 +7,6 @@
 - Minimize dependencies and coupling
 - Use modern C# features appropriately
 - Any code you commit MUST compile, and new and existing tests related to the change MUST pass.
-- MUST make your best effort to ensure any code changes satisfy those criteria before committing. If for any reason you were unable to build or test code changes, you MUST report that.
-- must NOT claim success unless all builds and tests pass as described above.
-- Before completing, use the code-review skill to review your code changes. Any issues flagged as errors or warnings should be addressed before completing.
-- Run tests locally before committing. Do not rely solely on CI to catch build or test failures.
-- If you are unsure about any of the requirements or how to implement a change, ask for clarification before proceeding. Do not make assumptions that could lead to code that does not meet the standards outlined above.
-- Ensure code coverage stays above 80% for the entire solution, and above 90% for critical paths, when running Unit and Integration tests. 
-- Follow TTD practices: write failing tests first (unit and integration), then implement code to pass those tests. Red Green refactor cycles should be followed to ensure code quality and maintainability.
 
 ## Architecture Overview
 
@@ -99,11 +92,7 @@ await app.ResourceNotifications.WaitForResourceHealthyAsync("webfrontend", cance
 - Use `Aspire.Hosting.Testing` for integration tests that involve multiple services and real HTTP communication.
 - Use `Moq` for mocking dependencies in unit tests.
 - Write tests that validate expected behavior and edge cases, not just to increase coverage numbers.
-- Use `Playwright` for testing blazor components.
 - Unit and Integration tests should pass when code changes are made; 
-- Ensure code coverage is at least 90% for critical paths and 80% overall.
-- NO NEED to run UI tests always. Can be skipped to faster development when no UI changes are involved.
-- UI tests should be run when major UI changes are implemented or when bugs are fixed in the UI layer to ensure that the changes work as expected and do not introduce new issues.
 - Do not merge code changes that reduce coverage below these thresholds without a compelling reason and a plan to add more tests.
 - Document any significant gaps in test coverage and the rationale for not covering them.
 - Do not include trivial tests that only exist to increase coverage numbers; all tests should provide meaningful validation of behavior.
