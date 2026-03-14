@@ -1,0 +1,261 @@
+@page "/admin/users"
+@rendermode InteractiveServer
+@attribute [Authorize(Roles = "FarmAdmin")]
+@using System.Security.Claims
+@using FarmAppAspire.Web.Data
+@using FarmAppAspire.Web.Services
+@inject UserAdminService UserAdminService
+@inject AuthenticationStateProvider AuthStateProvider
+
+<PageTitle>User Management</PageTitle>
+
+<h1>User Management</h1>
+
+@if (_errorMessage is not null)
+{
+    <div class="alert alert-danger alert-dismissible" role="alert">
+        @_errorMessage
+        <button type="button" class="btn-close" @onclick="() => _errorMessage = null"></button>
+    </div>
+}
+
+@if (_successMessage is not null)
+{
+    <div class="alert alert-success alert-dismissible" role="alert">
+        @_successMessage
+        <button type="button" class="btn-close" @onclick="() => _successMessage = null"></button>
+    </div>
+}
+
+@if (_tempPassword is not null)
+{
+    <div class="alert alert-info alert-dismissible" role="alert">
+        <strong>Temporary password:</strong> <code>@_tempPassword</code>
+        — share this with the user. It will not be shown again.
+        <button type="button" class="btn-close" @onclick="() => _tempPassword = null"></button>
+    </div>
+}
+
+<div class="mb-3">
+    <button class="btn btn-primary" @onclick="ToggleCreateForm">Add User</button>
+</div>
+
+@if (_showCreateForm)
+{
+    <div class="card mb-4">
+        <div class="card-header">New User</div>
+        <div class="card-body">
+            <EditForm Model="_createModel" OnValidSubmit="HandleCreateUserAsync">
+                <DataAnnotationsValidator />
+                <ValidationSummary class="text-danger" />
+
+                <div class="mb-3">
+                    <label class="form-label">Email</label>
+                    <InputText class="form-control" @bind-Value="_createModel.Email" />
+                    <ValidationMessage For="() => _createModel.Email" />
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label">Display Name</label>
+                    <InputText class="form-control" @bind-Value="_createModel.DisplayName" />
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label">Password</label>
+                    <InputText type="password" class="form-control" @bind-Value="_createModel.Password" />
+                    <ValidationMessage For="() => _createModel.Password" />
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label">Role</label>
+                    <InputSelect class="form-select" @bind-Value="_createModel.Role">
+                        @foreach (var role in IdentitySeeder.Roles)
+                        {
+                            <option value="@role">@role</option>
+                        }
+                    </InputSelect>
+                    <ValidationMessage For="() => _createModel.Role" />
+                </div>
+
+                <button type="submit" class="btn btn-success me-2">Create</button>
+                <button type="button" class="btn btn-secondary" @onclick="ToggleCreateForm">Cancel</button>
+            </EditForm>
+        </div>
+    </div>
+}
+
+@if (_users is null)
+{
+    <p><em>Loading...</em></p>
+}
+else
+{
+    <table class="table table-striped">
+        <thead>
+            <tr>
+                <th>Email</th>
+                <th>Display Name</th>
+                <th>Role</th>
+                <th>Active</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var user in _users)
+            {
+                var isSelf = user.Id == _currentUserId;
+                <tr>
+                    <td>@user.Email</td>
+                    <td>@user.DisplayName</td>
+                    <td>
+                        <select class="form-select form-select-sm"
+                                value="@user.Role"
+                                disabled="@isSelf"
+                                @onchange="e => HandleRoleChangeAsync(user.Id, e.Value?.ToString() ?? string.Empty)">
+                            @foreach (var role in IdentitySeeder.Roles)
+                            {
+                                <option value="@role" selected="@(user.Role == role)">@role</option>
+                            }
+                        </select>
+                    </td>
+                    <td>
+                        @if (user.IsActive)
+                        {
+                            <span class="badge bg-success">Active</span>
+                        }
+                        else
+                        {
+                            <span class="badge bg-secondary">Inactive</span>
+                        }
+                    </td>
+                    <td>
+                        @if (user.IsActive)
+                        {
+                            <button class="btn btn-sm btn-warning me-1"
+                                    disabled="@isSelf"
+                                    @onclick="() => HandleDeactivateAsync(user.Id)">
+                                Deactivate
+                            </button>
+                        }
+                        <button class="btn btn-sm btn-outline-secondary"
+                                @onclick="() => HandleResetPasswordAsync(user.Id)">
+                            Reset Password
+                        </button>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+@code {
+    private List<UserRow>? _users;
+    private string _currentUserId = string.Empty;
+    private bool _showCreateForm;
+    private string? _errorMessage;
+    private string? _successMessage;
+    private string? _tempPassword;
+
+    private CreateUserModel _createModel = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        _currentUserId = authState.User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? string.Empty;
+        await LoadUsersAsync();
+    }
+
+    private async Task LoadUsersAsync()
+    {
+        _users = await UserAdminService.GetAllUsersAsync();
+    }
+
+    private void ToggleCreateForm()
+    {
+        _showCreateForm = !_showCreateForm;
+        _createModel = new CreateUserModel();
+        _errorMessage = null;
+    }
+
+    private async Task HandleCreateUserAsync()
+    {
+        var (success, error) = await UserAdminService.CreateUserAsync(
+            _createModel.Email, _createModel.DisplayName, _createModel.Role, _createModel.Password);
+
+        if (success)
+        {
+            _showCreateForm = false;
+            _createModel = new CreateUserModel();
+            _successMessage = "User created successfully.";
+            await LoadUsersAsync();
+        }
+        else
+        {
+            _errorMessage = error;
+        }
+    }
+
+    private async Task HandleRoleChangeAsync(string userId, string newRole)
+    {
+        _errorMessage = null;
+        _successMessage = null;
+        var (success, error) = await UserAdminService.UpdateUserRoleAsync(userId, newRole, _currentUserId);
+        if (success)
+        {
+            _successMessage = "Role updated.";
+            await LoadUsersAsync();
+        }
+        else
+        {
+            _errorMessage = error;
+        }
+    }
+
+    private async Task HandleDeactivateAsync(string userId)
+    {
+        _errorMessage = null;
+        _successMessage = null;
+        var (success, error) = await UserAdminService.DeactivateUserAsync(userId, _currentUserId);
+        if (success)
+        {
+            _successMessage = "User deactivated.";
+            await LoadUsersAsync();
+        }
+        else
+        {
+            _errorMessage = error;
+        }
+    }
+
+    private async Task HandleResetPasswordAsync(string userId)
+    {
+        _errorMessage = null;
+        _successMessage = null;
+        _tempPassword = null;
+        var (success, tempPassword, error) = await UserAdminService.ResetPasswordAsync(userId);
+        if (success)
+        {
+            _tempPassword = tempPassword;
+            _successMessage = "Password reset. Share the temporary password with the user.";
+        }
+        else
+        {
+            _errorMessage = error;
+        }
+    }
+
+    private sealed class CreateUserModel
+    {
+        [Required]
+        [EmailAddress]
+        public string Email { get; set; } = string.Empty;
+
+        public string DisplayName { get; set; } = string.Empty;
+
+        [Required]
+        public string Password { get; set; } = string.Empty;
+
+        [Required]
+        public string Role { get; set; } = IdentitySeeder.Roles[0];
+    }
+}
