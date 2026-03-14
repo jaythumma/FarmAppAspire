@@ -94,7 +94,7 @@ public static class StandingOrderEndpoints
         g.MapPut("/{soId:guid}", async (Guid customerId, Guid soId,
             UpdateStandingOrderRequest req, CustomerDbContext db, HttpContext ctx) =>
         {
-            var so = await db.StandingOrders.Include(s => s.Lines)
+            var so = await db.StandingOrders.Include(s => s.Lines).Include(s => s.Skips)
                 .FirstOrDefaultAsync(s => s.Id == soId && s.CustomerId == customerId);
             if (so is null) return Results.NotFound();
 
