@@ -12,7 +12,7 @@
 <div class="row g-3 mb-4">
     <div class="col-auto">
         <label class="form-label fw-semibold">Customer</label>
-        <select class="form-select" @bind="_selectedCustomerId">
+        <select class="form-select" @bind="_selectedCustomerId" @bind:after="LoadInvoicesAsync">
             <option value="">— select customer —</option>
             @foreach (var c in _customers)
             {
