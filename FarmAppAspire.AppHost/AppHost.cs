@@ -10,10 +10,19 @@ var customerDb = builder.AddPostgres("customer-db")
     .WithDataVolume()
     .WithPgAdmin();
 
+var farmDb = builder.AddPostgres("farm-db")
+    .WithDataVolume()
+    .WithPgAdmin();
+
 var customerService = builder.AddProject<Projects.FarmAppAspire_CustomerService>("customerservice")
     .WithHttpHealthCheck("/health")
     .WithReference(customerDb)
     .WaitFor(customerDb);
+
+var farmService = builder.AddProject<Projects.FarmAppAspire_FarmService>("farmservice")
+    .WithHttpHealthCheck("/health")
+    .WithReference(farmDb)
+    .WaitFor(farmDb);
 
 builder.AddProject<Projects.FarmAppAspire_Web>("webfrontend")
     .WithExternalHttpEndpoints()
@@ -23,6 +32,8 @@ builder.AddProject<Projects.FarmAppAspire_Web>("webfrontend")
     .WithReference(identityDb)
     .WaitFor(identityDb)
     .WithReference(customerService)
-    .WaitFor(customerService);
+    .WaitFor(customerService)
+    .WithReference(farmService)
+    .WaitFor(farmService);
 
 builder.Build().Run();

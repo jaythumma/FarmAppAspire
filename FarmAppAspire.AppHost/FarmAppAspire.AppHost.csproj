@@ -11,6 +11,7 @@
   <ItemGroup>
     <ProjectReference Include="..\FarmAppAspire.Web\FarmAppAspire.Web.csproj" />
     <ProjectReference Include="..\FarmAppAspire.CustomerService\FarmAppAspire.CustomerService.csproj" />
+    <ProjectReference Include="..\FarmAppAspire.FarmService\FarmAppAspire.FarmService.csproj" />
   </ItemGroup>
 
   <ItemGroup>
