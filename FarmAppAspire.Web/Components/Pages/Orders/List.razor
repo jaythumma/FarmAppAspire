@@ -23,7 +23,7 @@
 <div class="row g-3 mb-4">
     <div class="col-auto">
         <label class="form-label fw-semibold">Customer</label>
-        <select class="form-select" @bind="_selectedCustomerId">
+        <select class="form-select" @bind="_selectedCustomerId" @bind:after="LoadOrdersAsync">
             <option value="">— select customer —</option>
             @foreach (var c in _customers)
             {
@@ -33,7 +33,7 @@
     </div>
     <div class="col-auto">
         <label class="form-label fw-semibold">Status</label>
-        <select class="form-select" @bind="_statusFilter">
+        <select class="form-select" @bind="_statusFilter" @bind:after="LoadOrdersAsync">
             <option value="">All</option>
             <option>Pending</option>
             <option>Harvested</option>
