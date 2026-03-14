@@ -2,6 +2,7 @@ using FarmAppAspire.Web;
 using FarmAppAspire.Web.Components;
 using FarmAppAspire.Web.Components.Layout;
 using FarmAppAspire.Web.Data;
+using FarmAppAspire.Web.Services;
 using Microsoft.AspNetCore.Identity;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -18,7 +19,7 @@ builder.Services.AddRazorPages();
 
 builder.AddNpgsqlDbContext<ApplicationDbContext>("identity-db");
 
-builder.Services.AddIdentity<IdentityUser, IdentityRole>(options =>
+builder.Services.AddIdentity<ApplicationUser, IdentityRole>(options =>
     {
         options.SignIn.RequireConfirmedAccount = false;
         options.Lockout.MaxFailedAccessAttempts = 5;
@@ -39,6 +40,8 @@ builder.Services.AddAuthorization();
 builder.Services.AddCascadingAuthenticationState();
 
 builder.Services.AddHostedService<IdentitySeeder>();
+
+builder.Services.AddScoped<UserAdminService>();
 
 builder.Services.AddHttpContextAccessor();
 
@@ -90,7 +93,7 @@ app.MapStaticAssets();
 
 app.MapRazorPages();
 
-app.MapPost("/account/logout", async (SignInManager<IdentityUser> signInManager) =>
+app.MapPost("/account/logout", async (SignInManager<ApplicationUser> signInManager) =>
 {
     await signInManager.SignOutAsync();
     return Results.Redirect("/account/login");

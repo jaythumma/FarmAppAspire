@@ -33,7 +33,7 @@ public sealed class IdentitySeederTests : IAsyncDisposable
         services.AddDbContext<ApplicationDbContext>(o =>
             o.UseSqlite(_connection)
              .ConfigureWarnings(w => w.Ignore(RelationalEventId.PendingModelChangesWarning)));
-        services.AddIdentity<IdentityUser, IdentityRole>(opts =>
+        services.AddIdentity<ApplicationUser, IdentityRole>(opts =>
         {
             opts.Password.RequireDigit = false;
             opts.Password.RequireLowercase = false;
@@ -77,7 +77,7 @@ public sealed class IdentitySeederTests : IAsyncDisposable
 
         await using var scope = _sp.CreateAsyncScope();
         var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole>>();
-        var roles = await roleManager.Roles.ToListAsync();
+        var roles = await roleManager.Roles.ToListAsync(TestContext.Current.CancellationToken);
 
         Assert.Equal(IdentitySeeder.Roles.Length, roles.Count);
     }
@@ -89,7 +89,7 @@ public sealed class IdentitySeederTests : IAsyncDisposable
         await CreateSeeder().StartAsync(ct);
 
         await using var scope = _sp.CreateAsyncScope();
-        var userManager = scope.ServiceProvider.GetRequiredService<UserManager<IdentityUser>>();
+        var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
 
         var admin = await userManager.FindByEmailAsync("admin@test.com");
         Assert.NotNull(admin);
@@ -107,8 +107,8 @@ public sealed class IdentitySeederTests : IAsyncDisposable
 
         // Add a second user directly to simulate existing users
         await using var setupScope = _sp.CreateAsyncScope();
-        var userManager = setupScope.ServiceProvider.GetRequiredService<UserManager<IdentityUser>>();
-        var extra = new IdentityUser { UserName = "other@test.com", Email = "other@test.com", EmailConfirmed = true };
+        var userManager = setupScope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+        var extra = new ApplicationUser { UserName = "other@test.com", Email = "other@test.com", EmailConfirmed = true };
         await userManager.CreateAsync(extra, "other123");
 
         // Build a fresh seeder with different admin credentials
@@ -122,7 +122,7 @@ public sealed class IdentitySeederTests : IAsyncDisposable
         await CreateSeeder(altSp).StartAsync(ct);
 
         await using var assertScope = _sp.CreateAsyncScope();
-        var um = assertScope.ServiceProvider.GetRequiredService<UserManager<IdentityUser>>();
+        var um = assertScope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
 
         Assert.Null(await um.FindByEmailAsync("newadmin@test.com"));
     }
@@ -135,9 +135,9 @@ public sealed class IdentitySeederTests : IAsyncDisposable
         await CreateSeeder(sp).StartAsync(ct);
 
         await using var scope = sp.CreateAsyncScope();
-        var userManager = scope.ServiceProvider.GetRequiredService<UserManager<IdentityUser>>();
+        var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
 
-        Assert.Equal(0, await userManager.Users.CountAsync());
+        Assert.Equal(0, await userManager.Users.CountAsync(TestContext.Current.CancellationToken));
     }
 
     public async ValueTask DisposeAsync()

@@ -5,6 +5,6 @@ using Microsoft.EntityFrameworkCore;
 namespace FarmAppAspire.Web.Data;
 
 public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options)
-    : IdentityDbContext<IdentityUser, IdentityRole, string>(options)
+    : IdentityDbContext<ApplicationUser, IdentityRole, string>(options)
 {
 }
