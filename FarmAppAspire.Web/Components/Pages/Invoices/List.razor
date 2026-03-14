@@ -1,0 +1,87 @@
+@page "/invoices"
+@rendermode InteractiveServer
+@attribute [Authorize]
+@inject CustomerApiClient CustomerApi
+@inject InvoiceApiClient InvoiceApi
+@implements IDisposable
+
+<PageTitle>Invoices</PageTitle>
+
+<h1>Invoices</h1>
+
+<div class="row g-3 mb-4">
+    <div class="col-auto">
+        <label class="form-label fw-semibold">Customer</label>
+        <select class="form-select" @bind="_selectedCustomerId">
+            <option value="">— select customer —</option>
+            @foreach (var c in _customers)
+            {
+                <option value="@c.Id">@c.DisplayName</option>
+            }
+        </select>
+    </div>
+    <div class="col-auto align-self-end">
+        <button class="btn btn-primary" @onclick="LoadInvoicesAsync">Search</button>
+    </div>
+</div>
+
+@if (_loading)
+{
+    <p><em>Loading...</em></p>
+}
+else if (_invoices is not null)
+{
+    @if (!_invoices.Any())
+    {
+        <p>No invoices found.</p>
+    }
+    else
+    {
+        <table class="table table-hover">
+            <thead>
+                <tr>
+                    <th>Label</th>
+                    <th>Channel</th>
+                    <th>Season</th>
+                    <th>Week #</th>
+                    <th>Created</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var inv in _invoices)
+                {
+                    <tr>
+                        <td>@inv.Label</td>
+                        <td>@inv.Channel</td>
+                        <td>@inv.SeasonYear</td>
+                        <td>@inv.SeekNum</td>
+                        <td>@inv.CreatedAt.ToString("MMM d, yyyy")</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+}
+
+@code {
+    private CustomerSummary[] _customers = [];
+    private InvoiceSummary[]? _invoices;
+    private string _selectedCustomerId = "";
+    private bool _loading;
+    private readonly CancellationTokenSource _cts = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        _customers = await CustomerApi.GetCustomersAsync(cancellationToken: _cts.Token);
+    }
+
+    private async Task LoadInvoicesAsync()
+    {
+        if (!Guid.TryParse(_selectedCustomerId, out var customerId)) return;
+        _loading = true;
+        _invoices = await InvoiceApi.GetInvoicesAsync(customerId, cancellationToken: _cts.Token);
+        _loading = false;
+    }
+
+    public void Dispose() => _cts.Cancel();
+}

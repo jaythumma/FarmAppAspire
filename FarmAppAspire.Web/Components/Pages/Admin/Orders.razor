@@ -1,0 +1,130 @@
+@page "/admin/orders"
+@rendermode InteractiveServer
+@attribute [Authorize(Roles = "FarmAdmin")]
+@inject CustomerApiClient CustomerApi
+@inject OrderApiClient OrderApi
+@implements IDisposable
+
+<PageTitle>Order Admin</PageTitle>
+
+<h1>Order Admin</h1>
+
+<div class="row g-3 mb-4">
+    <div class="col-auto">
+        <label class="form-label fw-semibold">Customer</label>
+        <select class="form-select" @bind="_selectedCustomerId">
+            <option value="">— select customer —</option>
+            @foreach (var c in _customers)
+            {
+                <option value="@c.Id">@c.DisplayName</option>
+            }
+        </select>
+    </div>
+    <div class="col-auto">
+        <label class="form-label fw-semibold">Status</label>
+        <select class="form-select" @bind="_statusFilter">
+            <option value="">All</option>
+            <option>Pending</option>
+            <option>Harvested</option>
+            <option>Inspected</option>
+            <option>Shipped</option>
+            <option>Cancelled</option>
+        </select>
+    </div>
+    <div class="col-auto align-self-end">
+        <button class="btn btn-primary" @onclick="LoadOrdersAsync">Search</button>
+    </div>
+</div>
+
+@if (_errorMessage is not null)
+{
+    <div class="alert alert-danger alert-dismissible" role="alert">
+        @_errorMessage
+        <button type="button" class="btn-close" @onclick="() => _errorMessage = null"></button>
+    </div>
+}
+
+@if (_loading)
+{
+    <p><em>Loading...</em></p>
+}
+else if (_orders is not null)
+{
+    @if (!_orders.Any())
+    {
+        <p>No orders found.</p>
+    }
+    else
+    {
+        <table class="table table-hover">
+            <thead>
+                <tr>
+                    <th>Week Of</th>
+                    <th>Channel</th>
+                    <th>Status</th>
+                    <th>Sample</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var o in _orders)
+                {
+                    <tr>
+                        <td>@o.WeekOf.ToString("MMM d, yyyy")</td>
+                        <td>@o.Channel</td>
+                        <td><span class="badge bg-secondary">@o.Status</span></td>
+                        <td>@(o.IsSample ? "Yes" : "No")</td>
+                        <td>
+                            @if (o.Status == "Pending")
+                            {
+                                <button class="btn btn-sm btn-outline-danger"
+                                        @onclick="() => CancelOrderAsync(o)">
+                                    Cancel
+                                </button>
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+}
+
+@code {
+    private CustomerSummary[] _customers = [];
+    private OrderSummary[]? _orders;
+    private string _selectedCustomerId = "";
+    private string _statusFilter = "";
+    private string? _errorMessage;
+    private bool _loading;
+    private readonly CancellationTokenSource _cts = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        _customers = await CustomerApi.GetCustomersAsync(cancellationToken: _cts.Token);
+    }
+
+    private async Task LoadOrdersAsync()
+    {
+        if (!Guid.TryParse(_selectedCustomerId, out var customerId)) return;
+        _loading = true;
+        _errorMessage = null;
+        _orders = await OrderApi.GetOrdersAsync(
+            customerId,
+            _statusFilter.Length > 0 ? _statusFilter : null,
+            _cts.Token);
+        _loading = false;
+    }
+
+    private async Task CancelOrderAsync(OrderSummary order)
+    {
+        if (!Guid.TryParse(_selectedCustomerId, out var customerId)) return;
+        var success = await OrderApi.CancelOrderAsync(customerId, order.Id, _cts.Token);
+        if (success)
+            await LoadOrdersAsync();
+        else
+            _errorMessage = $"Failed to cancel order {order.Id}.";
+    }
+
+    public void Dispose() => _cts.Cancel();
+}
