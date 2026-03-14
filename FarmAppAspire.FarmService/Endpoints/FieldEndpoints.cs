@@ -1,6 +1,7 @@
 using FarmAppAspire.FarmService.Data;
 using FarmAppAspire.FarmService.Models;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 
 namespace FarmAppAspire.FarmService.Endpoints;
 
@@ -68,7 +69,7 @@ public static class FieldEndpoints
             {
                 await db.SaveChangesAsync(ct);
             }
-            catch (DbUpdateException)
+            catch (DbUpdateException ex) when (ex.InnerException is PostgresException pg && pg.SqlState == PostgresErrorCodes.UniqueViolation)
             {
                 return Results.Problem($"A field with code '{req.Code}' already exists in this farm.", statusCode: StatusCodes.Status409Conflict);
             }
@@ -103,7 +104,7 @@ public static class FieldEndpoints
             {
                 await db.SaveChangesAsync(ct);
             }
-            catch (DbUpdateException)
+            catch (DbUpdateException ex) when (ex.InnerException is PostgresException pg && pg.SqlState == PostgresErrorCodes.UniqueViolation)
             {
                 return Results.Problem($"A field with code '{req.Code}' already exists in this farm.", statusCode: StatusCodes.Status409Conflict);
             }
