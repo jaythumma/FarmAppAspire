@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using FarmAppAspire.Web.Data;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
@@ -7,7 +8,7 @@ using Microsoft.AspNetCore.Mvc.RazorPages;
 namespace FarmAppAspire.Web.Pages.Account;
 
 [AllowAnonymous]
-public class LoginModel(SignInManager<IdentityUser> signInManager) : PageModel
+public class LoginModel(SignInManager<ApplicationUser> signInManager) : PageModel
 {
     [BindProperty]
     public InputModel Input { get; set; } = new();
@@ -37,6 +38,13 @@ public class LoginModel(SignInManager<IdentityUser> signInManager) : PageModel
     {
         if (!ModelState.IsValid)
             return Page();
+
+        var user = await signInManager.UserManager.FindByEmailAsync(Input.Email);
+        if (user is { IsActive: false })
+        {
+            ErrorMessage = "Your account is inactive. Please contact an administrator.";
+            return Page();
+        }
 
         var result = await signInManager.PasswordSignInAsync(
             Input.Email, Input.Password, Input.RememberMe, lockoutOnFailure: true);

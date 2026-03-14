@@ -31,7 +31,7 @@ public class IdentitySeeder(IServiceScopeFactory scopeFactory, ILogger<IdentityS
             return;
         }
 
-        var userManager = scope.ServiceProvider.GetRequiredService<UserManager<IdentityUser>>();
+        var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
 
         var existing = await userManager.FindByEmailAsync(email);
         if (existing is not null)
@@ -52,7 +52,7 @@ public class IdentitySeeder(IServiceScopeFactory scopeFactory, ILogger<IdentityS
             return;
         }
 
-        var admin = new IdentityUser { UserName = email, Email = email, EmailConfirmed = true };
+        var admin = new ApplicationUser { UserName = email, Email = email, EmailConfirmed = true, IsActive = true };
         var result = await userManager.CreateAsync(admin, password);
         if (result.Succeeded)
         {
