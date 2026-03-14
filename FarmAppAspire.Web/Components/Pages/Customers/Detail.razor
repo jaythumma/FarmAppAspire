@@ -3,6 +3,7 @@
 @attribute [Authorize]
 @inject CustomerApiClient CustomerApi
 @inject NavigationManager Nav
+@implements IDisposable
 
 <PageTitle>Customer Detail</PageTitle>
 
@@ -176,9 +177,12 @@ else
 @code {
     [Parameter] public Guid Id { get; set; }
     private CustomerDetail? _customer;
+    private readonly CancellationTokenSource _cts = new();
 
     protected override async Task OnInitializedAsync()
     {
-        _customer = await CustomerApi.GetCustomerAsync(Id);
+        _customer = await CustomerApi.GetCustomerAsync(Id, _cts.Token);
     }
+
+    public void Dispose() => _cts.Cancel();
 }

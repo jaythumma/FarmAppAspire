@@ -2,6 +2,7 @@
 @rendermode InteractiveServer
 @attribute [Authorize]
 @inject CustomerApiClient CustomerApi
+@implements IDisposable
 
 <PageTitle>Customers</PageTitle>
 
@@ -58,10 +59,13 @@ else
 
 @code {
     private CustomerSummary[]? _customers;
+    private readonly CancellationTokenSource _cts = new();
 
     protected override async Task OnInitializedAsync()
     {
         _customers = await CustomerApi.GetCustomersAsync(
-            cancellationToken: CancellationToken.None);
+            cancellationToken: _cts.Token);
     }
+
+    public void Dispose() => _cts.Cancel();
 }

@@ -87,7 +87,7 @@ public class CustomerEndpointTests : IAsyncLifetime
     [Fact]
     public async Task PostCustomer_WithoutXUserId_ReturnsBadRequest()
     {
-        var clientNoHeader = _app!.CreateHttpClient("customerservice");
+        using var clientNoHeader = _app!.CreateHttpClient("customerservice");
         var req = new CreateCustomerRequest(
             CustomerType.Retail, "No-Header",
             null, null, null, null, null, null,
@@ -197,7 +197,9 @@ public class CustomerEndpointTests : IAsyncLifetime
         var created = await createResp.Content.ReadFromJsonAsync<CustomerDetailDto>(JsonOptions);
 
         // Try to update without CompanyName
-        var updateReq = new UpdateCustomerRequest(name, null, null, null, null, null, null);
+        var updateReq = new UpdateCustomerRequest(
+            DisplayName: name, CompanyName: null, TaxId: null,
+            PaymentTerms: null, PrimaryEmail: null, PrimaryPhone: null, Notes: null);
         var response = await _client.PutAsJsonAsync($"/customers/{created!.Id}", updateReq, JsonOptions);
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
