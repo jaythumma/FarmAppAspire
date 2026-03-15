@@ -42,10 +42,13 @@ else
                 </select>
             </div>
 
-            <div class="mb-3">
-                <label class="form-label fw-semibold">Week Of *</label>
-                <InputDate @bind-Value="_model.WeekOf" class="form-control" />
-            </div>
+            @if (_channelType == ChannelType.Amazon)
+            {
+                <div class="mb-3">
+                    <label class="form-label fw-semibold">Week Of *</label>
+                    <InputDate @bind-Value="_model.WeekOf" class="form-control" />
+                </div>
+            }
         }
         else
         {
@@ -131,19 +134,60 @@ else
 
         @if (!IsEdit)
         {
+            @if (_channelType == ChannelType.Direct)
+            {
+                <div class="mb-3">
+                    <label class="form-label fw-semibold">Frequency *</label>
+                    <InputSelect @bind-Value="_model.Frequency" class="form-select">
+                        @foreach (var f in Enum.GetValues<OrderFrequency>().Where(f => f != OrderFrequency.Stopped))
+                        {
+                            <option value="@f">@f</option>
+                        }
+                    </InputSelect>
+                </div>
+
+                @if (_model.Frequency == OrderFrequency.Monthly)
+                {
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Monthly Week *</label>
+                        <InputSelect @bind-Value="_model.MonthlyWeek" class="form-select">
+                            <option value="">— select week —</option>
+                            @foreach (var w in Enum.GetValues<MonthlyWeek>())
+                            {
+                                <option value="@w">@w</option>
+                            }
+                        </InputSelect>
+                    </div>
+                }
+            }
+
             <h5>Order Lines</h5>
             @foreach (var (line, idx) in _model.Lines.Select((l, i) => (l, i)))
             {
                 <div class="row g-2 mb-2 align-items-center">
                     <div class="col-auto">
-                        <label class="form-label visually-hidden">Tier</label>
-                        <select class="form-select" @bind="line.TierSize">
-                            <option value="">— select tier —</option>
-                            @foreach (var tier in _tiers)
-                            {
-                                <option value="@tier.TierSize">@tier.TierSize (@tier.WeightOz oz – $@tier.FixedPrice.ToString("0.00"))</option>
-                            }
-                        </select>
+                        @if (_channelType == ChannelType.Direct)
+                        {
+                            <label class="form-label visually-hidden">Box Size</label>
+                            <select class="form-select" @bind="line.BoxSize">
+                                <option value="">— select box —</option>
+                                @foreach (var box in _boxes)
+                                {
+                                    <option value="@box.Size">@box.Size (@box.WeightLbs lbs – $@box.BasePricePerLb.ToString("0.00")/lb)</option>
+                                }
+                            </select>
+                        }
+                        else
+                        {
+                            <label class="form-label visually-hidden">Tier</label>
+                            <select class="form-select" @bind="line.TierSize">
+                                <option value="">— select tier —</option>
+                                @foreach (var tier in _tiers)
+                                {
+                                    <option value="@tier.TierSize">@tier.TierSize (@tier.WeightOz oz – $@tier.FixedPrice.ToString("0.00"))</option>
+                                }
+                            </select>
+                        }
                     </div>
                     <div class="col-2">
                         <label class="form-label visually-hidden">Qty</label>
@@ -181,6 +225,8 @@ else
     private CustomerSummary[] _customers = [];
     private ContactDto[] _contacts = [];
     private FedExTierInfo[] _tiers = [];
+    private InsulatedBoxInfo[] _boxes = [];
+    private ChannelType _channelType = ChannelType.Direct;
     private OrderDetail? _existingOrder;
     private string? _errorMessage;
     private bool _loading = true;
@@ -191,6 +237,7 @@ else
     {
         _customers = await CustomerApi.GetCustomersAsync(cancellationToken: _cts.Token);
         _tiers = await OrderApi.GetFedExTiersAsync(_cts.Token);
+        _boxes = await OrderApi.GetInsulatedBoxesAsync(_cts.Token);
 
         if (IsEdit && CustomerId.HasValue && OrderId.HasValue)
         {
@@ -210,8 +257,16 @@ else
     {
         _model.CustomerId = e.Value?.ToString() ?? "";
         _contacts = [];
+        _model.Lines = [new LineModel()];
         if (Guid.TryParse(_model.CustomerId, out var id))
+        {
+            _channelType = _customers.FirstOrDefault(c => c.Id == id)?.ChannelType ?? ChannelType.Direct;
             await LoadContactsAsync(id);
+        }
+        else
+        {
+            _channelType = ChannelType.Direct;
+        }
     }
 
     private async Task LoadContactsAsync(Guid customerId)
@@ -251,25 +306,56 @@ else
                     return;
                 }
 
-                var invalidLines = _model.Lines.Where(l => string.IsNullOrEmpty(l.TierSize) || l.Qty < 1).ToList();
-                if (invalidLines.Count > 0)
-                {
-                    _errorMessage = "All lines must have a tier selected and quantity of at least 1.";
-                    return;
-                }
-
                 Guid? contactId = Guid.TryParse(_model.ContactId, out var cid) ? cid : null;
-                var lines = _model.Lines
-                    .Select(l => new FedExOrderLineRequest(Enum.Parse<FedExTierSize>(l.TierSize), l.Qty))
-                    .ToList();
 
-                var result = await OrderApi.CreateFedExOrderAsync(
-                    customerId,
-                    new CreateFedExOrderRequest(contactId, lines, _model.WeekOf, _model.IsSample),
-                    _cts.Token);
+                if (_channelType == ChannelType.Direct)
+                {
+                    var invalidLines = _model.Lines.Where(l => string.IsNullOrEmpty(l.BoxSize) || l.Qty < 1).ToList();
+                    if (invalidLines.Count > 0)
+                    {
+                        _errorMessage = "All lines must have a box size selected and quantity of at least 1.";
+                        return;
+                    }
 
-                if (result is not null)
-                    Nav.NavigateTo("/orders");
+                    if (_model.Frequency == OrderFrequency.Monthly && _model.MonthlyWeek is null)
+                    {
+                        _errorMessage = "Monthly week is required for monthly frequency.";
+                        return;
+                    }
+
+                    var lines = _model.Lines
+                        .Select(l => new StandingOrderLineRequest(Enum.Parse<InsulatedBoxSize>(l.BoxSize), l.Qty))
+                        .ToList();
+
+                    var result = await OrderApi.CreateStandingOrderAsync(
+                        customerId,
+                        new CreateStandingOrderRequest(contactId, _model.Frequency, _model.MonthlyWeek, _model.IsSample, lines),
+                        _cts.Token);
+
+                    if (result is not null)
+                        Nav.NavigateTo("/orders");
+                }
+                else
+                {
+                    var invalidLines = _model.Lines.Where(l => string.IsNullOrEmpty(l.TierSize) || l.Qty < 1).ToList();
+                    if (invalidLines.Count > 0)
+                    {
+                        _errorMessage = "All lines must have a tier selected and quantity of at least 1.";
+                        return;
+                    }
+
+                    var lines = _model.Lines
+                        .Select(l => new FedExOrderLineRequest(Enum.Parse<FedExTierSize>(l.TierSize), l.Qty))
+                        .ToList();
+
+                    var result = await OrderApi.CreateFedExOrderAsync(
+                        customerId,
+                        new CreateFedExOrderRequest(contactId, lines, _model.WeekOf, _model.IsSample),
+                        _cts.Token);
+
+                    if (result is not null)
+                        Nav.NavigateTo("/orders");
+                }
             }
         }
         catch (HttpRequestException ex)
@@ -294,12 +380,15 @@ else
         public DateTime WeekOf { get; set; } = DateTime.Today;
         public bool IsSample { get; set; }
         public string? ContactId { get; set; }
+        public OrderFrequency Frequency { get; set; } = OrderFrequency.Weekly;
+        public MonthlyWeek? MonthlyWeek { get; set; }
         public List<LineModel> Lines { get; set; } = [new LineModel()];
     }
 
     private class LineModel
     {
         public string TierSize { get; set; } = "";
+        public string BoxSize { get; set; } = "";
         public int Qty { get; set; } = 1;
     }
 }
