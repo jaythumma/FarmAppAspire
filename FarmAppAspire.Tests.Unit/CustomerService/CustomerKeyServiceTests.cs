@@ -23,6 +23,37 @@ public class CustomerKeyServiceTests
         Assert.Equal(expected, key);
     }
 
+    // ── Amazon channel key generation ─────────────────────────────────────────
+
+    [Theory]
+    [InlineData("Sunrise",               "Dallas",   "TX", "AMZ-SUN-DAL-TX")]
+    [InlineData("Mangrove Foods",         "Chicago",  "IL", "AMZ-MFA-CHI-IL")]
+    [InlineData("Green Valley Foods LLC", "Austin",   "TX", "AMZ-GVF-AUS-TX")]
+    [InlineData("Blue Sky Inc",           "New York", "NY", "AMZ-BSL-NEW-NY")]
+    [InlineData("The Fresh Market",       "Atlanta",  "GA", "AMZ-FMR-ATL-GA")]
+    public void Generate_Amazon_ProducesAmzPrefixedKey(string displayName, string city, string state, string expected)
+    {
+        var customer = MakeCustomer(displayName, city, state, ChannelType.Amazon);
+        var key = _svc.Generate(customer);
+        Assert.Equal(expected, key);
+    }
+
+    [Fact]
+    public void Generate_Amazon_KeyStartsWithAmzPrefix()
+    {
+        var customer = MakeCustomer("Sunrise", "Dallas", "TX", ChannelType.Amazon);
+        var key = _svc.Generate(customer);
+        Assert.StartsWith("AMZ-", key);
+    }
+
+    [Fact]
+    public void Generate_Direct_KeyDoesNotStartWithAmzPrefix()
+    {
+        var customer = MakeCustomer("Sunrise", "Dallas", "TX");
+        var key = _svc.Generate(customer);
+        Assert.DoesNotContain("AMZ-", key);
+    }
+
     [Fact]
     public void Generate_CityLongerThan3Chars_TruncatesTo3()
     {
@@ -66,10 +97,12 @@ public class CustomerKeyServiceTests
         Assert.False(CustomerKeyService.CheckCollision("SUN-DAL-TX", thisId, existing));
     }
 
-    private static Customer MakeCustomer(string displayName, string city, string state) => new()
+    private static Customer MakeCustomer(string displayName, string city, string state,
+        ChannelType channelType = ChannelType.Direct) => new()
     {
         Id = Guid.NewGuid(),
         DisplayName = displayName,
+        ChannelType = channelType,
         Addresses =
         [
             new CustomerAddress

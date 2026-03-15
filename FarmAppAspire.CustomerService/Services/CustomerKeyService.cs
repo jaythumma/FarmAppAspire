@@ -5,8 +5,10 @@ namespace FarmAppAspire.CustomerService.Services;
 
 /// <summary>
 /// Generates and validates CustomerKey identifiers.
-/// Key format: {NameAbbr}-{CityAbbr}-{StateAbbr}
-/// e.g. "Green Valley Foods LLC" + Chicago, IL → "GVF-CHI-IL"
+/// Standard key format:  {NameAbbr}-{CityAbbr}-{StateAbbr}
+/// Amazon channel format: AMZ-{NameAbbr}-{CityAbbr}-{StateAbbr}
+/// e.g. "Green Valley Foods LLC" + Chicago, IL → "GVF-CHI-IL" (Direct)
+///                                              → "AMZ-GVF-CHI-IL" (Amazon)
 /// </summary>
 public class CustomerKeyService
 {
@@ -26,6 +28,9 @@ public class CustomerKeyService
 
         var nameAbbr = BuildNameAbbr(customer.DisplayName);
         var cityAbbr = BuildCityAbbr(city);
+
+        if (customer.ChannelType == ChannelType.Amazon)
+            return $"AMZ-{nameAbbr}-{cityAbbr}-{state.ToUpperInvariant()}";
 
         return $"{nameAbbr}-{cityAbbr}-{state.ToUpperInvariant()}";
     }
