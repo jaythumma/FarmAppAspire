@@ -68,7 +68,7 @@ else if (_orders is not null)
                     <th>Qty</th>
                     <th class="text-end">Amount</th>
                     <th>Sample</th>
-                    <th></th>
+                    <th class="text-end">Actions</th>
                 </tr>
             </thead>
             <tbody>
@@ -77,7 +77,7 @@ else if (_orders is not null)
                     <tr>
                         <td>@o.WeekOf.ToString("MMM d, yyyy")</td>
                         <td>@o.Channel</td>
-                        <td><span class="badge bg-secondary">@o.Status</span></td>
+                        <td><span class="badge @OrderLifecycleRules.StatusBadgeClass(o.Status)">@o.Status</span></td>
                         <td>@o.TotalQty</td>
                         <td class="text-end">@o.TotalAmount.ToString("C")</td>
                         <td>@(o.IsSample ? "Yes" : "No")</td>
@@ -86,6 +86,24 @@ else if (_orders is not null)
                             {
                                 <a href="/orders/@o.CustomerId/@o.Id/edit"
                                    class="btn btn-sm btn-outline-primary me-1">Edit</a>
+                            }
+                            @if (OrderLifecycleRules.CanHarvest(o.Status))
+                            {
+                                <button class="btn btn-sm btn-outline-info me-1"
+                                        @onclick="() => HarvestAsync(o)">Harvest</button>
+                            }
+                            @if (OrderLifecycleRules.CanInspect(o.Status))
+                            {
+                                <button class="btn btn-sm btn-outline-primary me-1"
+                                        @onclick="() => InspectAsync(o)">Inspect</button>
+                            }
+                            @if (OrderLifecycleRules.CanShip(o.Status))
+                            {
+                                <button class="btn btn-sm btn-outline-success me-1"
+                                        @onclick="() => ShipAsync(o)">Ship</button>
+                            }
+                            @if (OrderLifecycleRules.CanCancel(o.Status))
+                            {
                                 <button class="btn btn-sm btn-outline-danger"
                                         @onclick="() => CancelOrderAsync(o)">Cancel</button>
                             }
@@ -130,6 +148,30 @@ else if (_orders is not null)
             await LoadOrdersAsync();
         else
             _errorMessage = $"Failed to cancel order {order.Id}.";
+    }
+
+    private async Task HarvestAsync(OrderSummary order)
+    {
+        if (!Guid.TryParse(_selectedCustomerId, out var customerId)) return;
+        var result = await OrderApi.HarvestOrderAsync(customerId, order.Id, _cts.Token);
+        if (result is not null) await LoadOrdersAsync();
+        else _errorMessage = "Failed to mark as Harvested.";
+    }
+
+    private async Task InspectAsync(OrderSummary order)
+    {
+        if (!Guid.TryParse(_selectedCustomerId, out var customerId)) return;
+        var result = await OrderApi.InspectOrderAsync(customerId, order.Id, DateTime.UtcNow, _cts.Token);
+        if (result is not null) await LoadOrdersAsync();
+        else _errorMessage = "Inspect failed — inspection must occur on a Friday or Monday.";
+    }
+
+    private async Task ShipAsync(OrderSummary order)
+    {
+        if (!Guid.TryParse(_selectedCustomerId, out var customerId)) return;
+        var result = await OrderApi.ShipOrderAsync(customerId, order.Id, _cts.Token);
+        if (result is not null) await LoadOrdersAsync();
+        else _errorMessage = "Failed to mark as Shipped.";
     }
 
     public void Dispose() => _cts.Cancel();
