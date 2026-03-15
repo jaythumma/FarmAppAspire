@@ -6,6 +6,13 @@
 
 <PageTitle>Customers</PageTitle>
 
+<style>
+    .sortable { cursor: pointer; user-select: none; white-space: nowrap; }
+    .sortable:hover { background-color: var(--bs-table-hover-bg, #f8f9fa); }
+    .sort-icon { opacity: 0.4; font-size: 0.75em; }
+    .sort-icon.active { opacity: 1; }
+</style>
+
 <div class="d-flex justify-content-between align-items-center mb-3">
     <h1 class="mb-0">Customers</h1>
     <AuthorizeView Roles="FarmAdmin">
@@ -25,70 +32,360 @@ else if (!_customers.Any())
 }
 else
 {
-    <table class="table table-hover">
-        <thead>
-            <tr>
-                    <th>Customer Key</th>
-                    <th>Name</th>
-                    <th>Type</th>
-                    <th>Channel</th>
-                    <th>Company</th>
-                    <th>Email</th>
-                    <th>Phone</th>
-                    <th class="text-center">Orders</th>
-                    <th class="text-end">Total</th>
-                    <th></th>
-                </tr>
-        </thead>
-        <tbody>
-            @foreach (var c in _customers)
+    @* ── Controls row ──────────────────────────────────────────────────────── *@
+    <div class="row g-2 align-items-center mb-3 flex-wrap">
+        <div class="col-auto">
+            <div class="form-check form-switch mb-0">
+                <input class="form-check-input" type="checkbox" id="groupToggle"
+                       @bind="_groupingEnabled" @bind:after="ResetPage" />
+                <label class="form-check-label fw-semibold" for="groupToggle">
+                    Group by Channel / Type
+                </label>
+            </div>
+        </div>
+        <div class="col-auto">
+            <div class="input-group input-group-sm">
+                <span class="input-group-text"><span class="bi bi-search"></span></span>
+                <input type="text" class="form-control" style="width:200px"
+                       placeholder="Name, key, email…"
+                       value="@_searchText"
+                       @oninput="OnSearch" />
+                @if (!string.IsNullOrEmpty(_searchText))
+                {
+                    <button class="btn btn-outline-secondary" type="button"
+                            @onclick="ClearSearch" title="Clear search">✕</button>
+                }
+            </div>
+        </div>
+        <div class="col-auto">
+            <div class="input-group input-group-sm">
+                <label class="input-group-text" for="pageSizeSelect">Per page</label>
+                <select id="pageSizeSelect" class="form-select form-select-sm"
+                        @bind="_pageSize" @bind:after="ResetPage">
+                    <option value="10">10</option>
+                    <option value="25">25</option>
+                    <option value="50">50</option>
+                    <option value="100">100</option>
+                </select>
+            </div>
+        </div>
+        <div class="col-auto ms-auto">
+            <span class="text-muted small">
+                @_filteredCustomers.Length customer@(_filteredCustomers.Length == 1 ? "" : "s")
+            </span>
+        </div>
+    </div>
+
+    @* ── Grouped view ──────────────────────────────────────────────────────── *@
+    @if (_groupingEnabled)
+    {
+        var channelGroups = CustomerListHelper.GroupCustomers(_filteredCustomers, _sortColumn, _sortAscending);
+
+        @if (!channelGroups.Any())
+        {
+            <p class="text-muted">No customers match the current filter.</p>
+        }
+
+        @foreach (var cg in channelGroups)
+        {
+            <div class="mb-4">
+                <h4 class="border-bottom pb-1 text-primary">
+                    @(cg.Channel == ChannelType.Direct ? "Direct Channel" : "Amazon Channel")
+                    <span class="badge bg-secondary ms-2">@cg.TotalCount</span>
+                </h4>
+
+                @if (cg.Channel == ChannelType.Direct)
+                {
+                    @* Direct: two sub-groups – Wholesale then Retail *@
+                    @foreach (var tg in cg.TypeGroups)
+                    {
+                        <div class="ms-3 mb-3">
+                            <h5 class="text-secondary">
+                                @tg.TypeLabel
+                                <span class="badge bg-light text-dark ms-1">@tg.Customers.Count</span>
+                            </h5>
+                            <table class="table table-hover table-sm" aria-label="@tg.TypeLabel customers">
+                                <thead>
+                                    <tr>
+                                        @SortHeader("CustomerKey", "Customer Key")
+                                        @SortHeader("DisplayName", "Name")
+                                        <th>Company</th>
+                                        <th>Email</th>
+                                        <th>Phone</th>
+                                        @SortHeader("Orders", "Orders", "text-center")
+                                        @SortHeader("Total",  "Total",  "text-end")
+                                        <th></th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var c in tg.Customers)
+                                    {
+                                        <tr>
+                                            @CustomerKeyCell(c)
+                                            <td><a href="/customers/@c.Id">@c.DisplayName</a></td>
+                                            <td>@c.CompanyName</td>
+                                            <td>@c.PrimaryEmail</td>
+                                            <td>@c.PrimaryPhone</td>
+                                            <td class="text-center">@c.OrderCount</td>
+                                            <td class="text-end">@c.TotalOrderAmount.ToString("C")</td>
+                                            @EditCell(c)
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                }
+                else
+                {
+                    @* Amazon channel – flat list within the channel group *@
+                    <div class="ms-3">
+                        <table class="table table-hover table-sm" aria-label="Amazon channel customers">
+                            <thead>
+                                <tr>
+                                    @SortHeader("CustomerKey", "Customer Key")
+                                    @SortHeader("DisplayName", "Name")
+                                    @SortHeader("Type",        "Type")
+                                    <th>Company</th>
+                                    <th>Email</th>
+                                    <th>Phone</th>
+                                    @SortHeader("Orders", "Orders", "text-center")
+                                    @SortHeader("Total",  "Total",  "text-end")
+                                    <th></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var c in cg.AllCustomers)
+                                {
+                                    <tr>
+                                        @CustomerKeyCell(c)
+                                        <td><a href="/customers/@c.Id">@c.DisplayName</a></td>
+                                        <td>@c.Type</td>
+                                        <td>@c.CompanyName</td>
+                                        <td>@c.PrimaryEmail</td>
+                                        <td>@c.PrimaryPhone</td>
+                                        <td class="text-center">@c.OrderCount</td>
+                                        <td class="text-end">@c.TotalOrderAmount.ToString("C")</td>
+                                        @EditCell(c)
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+            </div>
+        }
+    }
+    else
+    {
+        @* ── Flat view with pagination ─────────────────────────────────────── *@
+        var paged = CustomerListHelper.ApplyPage(_sortedCustomers, _currentPage, _pageSize);
+
+        @if (paged.Length == 0)
+        {
+            <p class="text-muted">No customers match the current filter.</p>
+        }
+        else
+        {
+            <table class="table table-hover" aria-label="Customers">
+                <thead>
+                    <tr>
+                        @SortHeader("CustomerKey", "Customer Key")
+                        @SortHeader("DisplayName", "Name")
+                        @SortHeader("Type",        "Type")
+                        <th>Channel</th>
+                        <th>Company</th>
+                        <th>Email</th>
+                        <th>Phone</th>
+                        @SortHeader("Orders", "Orders", "text-center")
+                        @SortHeader("Total",  "Total",  "text-end")
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var c in paged)
+                    {
+                        <tr>
+                            @CustomerKeyCell(c)
+                            <td><a href="/customers/@c.Id">@c.DisplayName</a></td>
+                            <td>@c.Type</td>
+                            <td>@c.ChannelType</td>
+                            <td>@c.CompanyName</td>
+                            <td>@c.PrimaryEmail</td>
+                            <td>@c.PrimaryPhone</td>
+                            <td class="text-center">@c.OrderCount</td>
+                            <td class="text-end">@c.TotalOrderAmount.ToString("C")</td>
+                            @EditCell(c)
+                        </tr>
+                    }
+                </tbody>
+            </table>
+
+            @* ── Pagination ──────────────────────────────────────────────── *@
+            var totalPages = CustomerListHelper.TotalPages(_filteredCustomers.Length, _pageSize);
+            if (totalPages > 1)
             {
-                <tr>
-                    <td>
-                        @if (!string.IsNullOrEmpty(c.CustomerKey))
+                <nav aria-label="Customer list pagination">
+                    <ul class="pagination justify-content-center flex-wrap">
+                        <li class="page-item @(_currentPage == 1 ? "disabled" : "")">
+                            <button class="page-link" @onclick="() => GoToPage(_currentPage - 1)"
+                                    aria-label="Previous page">&laquo;</button>
+                        </li>
+                        @for (int p = Math.Max(1, _currentPage - 2); p <= Math.Min(totalPages, _currentPage + 2); p++)
                         {
-                            <a href="/customers/@c.Id" class="fw-bold font-monospace text-decoration-none fs-6">
-                                @c.CustomerKey
-                            </a>
-                            @if (c.CustomerKeyCollision)
-                            {
-                                <span class="badge bg-warning text-dark ms-1" title="Key collision detected">⚠</span>
-                            }
+                            int pageNum = p;
+                            <li class="page-item @(_currentPage == pageNum ? "active" : "")">
+                                <button class="page-link" @onclick="() => GoToPage(pageNum)"
+                                        aria-label="Page @pageNum">@pageNum</button>
+                            </li>
                         }
-                        else
-                        {
-                            <span class="text-muted small fst-italic">No key</span>
-                        }
-                    </td>
-                    <td><a href="/customers/@c.Id">@c.DisplayName</a></td>
-                    <td>@c.Type</td>
-                    <td>@c.ChannelType</td>
-                    <td>@c.CompanyName</td>
-                    <td>@c.PrimaryEmail</td>
-                    <td>@c.PrimaryPhone</td>
-                    <td class="text-center">@c.OrderCount</td>
-                    <td class="text-end">@c.TotalOrderAmount.ToString("C")</td>
-                    <td>
-                        <AuthorizeView Roles="FarmAdmin">
-                            <Authorized>
-                                <a href="/customers/@c.Id/edit" class="btn btn-sm btn-outline-secondary">Edit</a>
-                            </Authorized>
-                        </AuthorizeView>
-                    </td>
-                </tr>
+                        <li class="page-item @(_currentPage == totalPages ? "disabled" : "")">
+                            <button class="page-link" @onclick="() => GoToPage(_currentPage + 1)"
+                                    aria-label="Next page">&raquo;</button>
+                        </li>
+                    </ul>
+                </nav>
+                <p class="text-center text-muted small">
+                    Page @_currentPage of @totalPages
+                    (@_filteredCustomers.Length customer@(_filteredCustomers.Length == 1 ? "" : "s"))
+                </p>
             }
-        </tbody>
-    </table>
+        }
+    }
 }
 
 @code {
     private CustomerSummary[]? _customers;
     private readonly CancellationTokenSource _cts = new();
 
+    // ── Controls state ────────────────────────────────────────────────────────
+    private bool   _groupingEnabled = true;
+    private string _searchText      = string.Empty;
+    private string _sortColumn      = "CustomerKey";
+    private bool   _sortAscending   = true;
+    private int    _currentPage     = 1;
+    private int    _pageSize        = 25;
+
+    // ── Computed helpers ──────────────────────────────────────────────────────
+    private CustomerSummary[] _filteredCustomers =>
+        CustomerListHelper.ApplyFilter(_customers ?? [], _searchText);
+
+    private CustomerSummary[] _sortedCustomers =>
+        CustomerListHelper.ApplySort(_filteredCustomers, _sortColumn, _sortAscending);
+
+    // ── Event handlers ────────────────────────────────────────────────────────
+
+    private void OnSearch(ChangeEventArgs e)
+    {
+        _searchText = e.Value?.ToString() ?? string.Empty;
+        ResetPage();
+    }
+
+    private void ClearSearch()
+    {
+        _searchText = string.Empty;
+        ResetPage();
+    }
+
+    private void Sort(string column)
+    {
+        if (_sortColumn == column)
+            _sortAscending = !_sortAscending;
+        else
+        {
+            _sortColumn   = column;
+            _sortAscending = true;
+        }
+        _currentPage = 1;
+    }
+
+    private void GoToPage(int page)
+    {
+        var total = CustomerListHelper.TotalPages(_filteredCustomers.Length, _pageSize);
+        _currentPage = Math.Clamp(page, 1, total);
+    }
+
+    private void ResetPage() => _currentPage = 1;
+
+    // ── Render helpers ────────────────────────────────────────────────────────
+
+    private RenderFragment SortHeader(string column, string label, string? extraCss = null) =>
+        builder =>
+        {
+            var isActive = _sortColumn == column;
+            var icon     = !isActive ? "⇅" : (_sortAscending ? "↑" : "↓");
+            var css      = $"sortable{(extraCss is not null ? " " + extraCss : "")}";
+            builder.OpenElement(0, "th");
+            builder.AddAttribute(1, "class", css);
+            builder.AddAttribute(2, "onclick", EventCallback.Factory.Create(this, () => Sort(column)));
+            builder.AddContent(3, label);
+            builder.AddContent(4, " ");
+            builder.OpenElement(5, "span");
+            builder.AddAttribute(6, "class", $"sort-icon{(isActive ? " active" : "")}");
+            builder.AddContent(7, icon);
+            builder.CloseElement();
+            builder.CloseElement();
+        };
+
+    private static RenderFragment CustomerKeyCell(CustomerSummary c) =>
+        builder =>
+        {
+            builder.OpenElement(0, "td");
+            if (!string.IsNullOrEmpty(c.CustomerKey))
+            {
+                builder.OpenElement(1, "a");
+                builder.AddAttribute(2, "href", $"/customers/{c.Id}");
+                builder.AddAttribute(3, "class", "fw-bold font-monospace text-decoration-none fs-6");
+                builder.AddContent(4, c.CustomerKey);
+                builder.CloseElement();
+                if (c.CustomerKeyCollision)
+                {
+                    builder.OpenElement(5, "span");
+                    builder.AddAttribute(6, "class", "badge bg-warning text-dark ms-1");
+                    builder.AddAttribute(7, "title", "Key collision detected");
+                    builder.AddContent(8, "⚠");
+                    builder.CloseElement();
+                }
+            }
+            else
+            {
+                builder.OpenElement(9, "span");
+                builder.AddAttribute(10, "class", "text-muted small fst-italic");
+                builder.AddContent(11, "No key");
+                builder.CloseElement();
+            }
+            builder.CloseElement();
+        };
+
+    private static RenderFragment EditCell(CustomerSummary c) =>
+        builder =>
+        {
+            builder.OpenElement(0, "td");
+            builder.OpenComponent<AuthorizeView>(1);
+            builder.AddComponentParameter(2, "Roles", "FarmAdmin");
+            builder.AddComponentParameter(3, "Authorized", (RenderFragment<AuthenticationState>)(_ =>
+                innerBuilder =>
+                {
+                    innerBuilder.OpenElement(0, "a");
+                    innerBuilder.AddAttribute(1, "href", $"/customers/{c.Id}/edit");
+                    innerBuilder.AddAttribute(2, "class", "btn btn-sm btn-outline-secondary");
+                    innerBuilder.AddContent(3, "Edit");
+                    innerBuilder.CloseElement();
+                }));
+            builder.CloseComponent();
+            builder.CloseElement();
+        };
+
+    // ── Lifecycle ─────────────────────────────────────────────────────────────
+
     protected override async Task OnInitializedAsync()
     {
+        // Load all customers for client-side grouping/sorting/filtering.
+        // size: 1000 is a practical ceiling for a typical farm; if the
+        // customer count grows significantly, replace with server-side
+        // grouping and paging via the API.
         _customers = await CustomerApi.GetCustomersAsync(
-            cancellationToken: _cts.Token);
+            size: 1000, cancellationToken: _cts.Token);
     }
 
     public void Dispose() => _cts.Cancel();
