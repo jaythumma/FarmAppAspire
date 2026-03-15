@@ -97,6 +97,25 @@ public static class AdminEndpoints
             });
         });
 
+        g.MapPost("/season/restart", async (SeasonRestartRequest req, CustomerDbContext db) =>
+        {
+            var activeOrders = await db.StandingOrders
+                .Where(s => s.Status == StandingOrderStatus.Active
+                         || s.Status == StandingOrderStatus.Paused)
+                .ToListAsync();
+
+            foreach (var so in activeOrders)
+                so.SeasonYear = req.TargetSeasonYear;
+
+            await db.SaveChangesAsync();
+
+            return Results.Ok(new
+            {
+                TargetSeasonYear = req.TargetSeasonYear,
+                UpdatedOrders    = activeOrders.Count
+            });
+        });
+
         return app;
     }
 }

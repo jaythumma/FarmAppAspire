@@ -75,3 +75,4 @@ public record InvoiceDto(
 // ── Admin DTOs ────────────────────────────────────────────────────────────────
 public record GenerateInstancesRequest(DateTime ForWeek);
 public record CustomerKeyDto(string? CustomerKey, bool HasCollision);
+public record SeasonRestartRequest(int TargetSeasonYear);
