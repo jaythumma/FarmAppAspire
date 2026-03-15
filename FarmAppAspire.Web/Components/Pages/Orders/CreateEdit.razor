@@ -117,7 +117,9 @@ else
         }
 
         <div class="mb-3">
-            <label class="form-label fw-semibold">Contact</label>
+            <label class="form-label fw-semibold">
+                Contact @(OrderContactRules.ContactIsRequired(_customerType) ? "*" : "")
+            </label>
             <select class="form-select" @bind="_model.ContactId">
                 <option value="">— none —</option>
                 @foreach (var c in _contacts)
@@ -227,6 +229,7 @@ else
     private FedExTierInfo[] _tiers = [];
     private InsulatedBoxInfo[] _boxes = [];
     private ChannelType _channelType = ChannelType.Direct;
+    private CustomerType _customerType = CustomerType.Retail;
     private OrderDetail? _existingOrder;
     private string? _errorMessage;
     private bool _loading = true;
@@ -257,15 +260,19 @@ else
     {
         _model.CustomerId = e.Value?.ToString() ?? "";
         _contacts = [];
+        _model.ContactId = null;
         _model.Lines = [new LineModel()];
         if (Guid.TryParse(_model.CustomerId, out var id))
         {
-            _channelType = _customers.FirstOrDefault(c => c.Id == id)?.ChannelType ?? ChannelType.Direct;
+            var selected = _customers.FirstOrDefault(c => c.Id == id);
+            _channelType = selected?.ChannelType ?? ChannelType.Direct;
+            _customerType = selected?.Type ?? CustomerType.Retail;
             await LoadContactsAsync(id);
         }
         else
         {
             _channelType = ChannelType.Direct;
+            _customerType = CustomerType.Retail;
         }
     }
 
@@ -303,6 +310,13 @@ else
                 if (!Guid.TryParse(_model.CustomerId, out var customerId))
                 {
                     _errorMessage = "Please select a customer.";
+                    return;
+                }
+
+                var contactError = OrderContactRules.ValidateContact(_customerType, _model.ContactId);
+                if (contactError is not null)
+                {
+                    _errorMessage = contactError;
                     return;
                 }
 

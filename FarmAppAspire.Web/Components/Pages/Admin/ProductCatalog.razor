@@ -1,0 +1,160 @@
+@page "/admin/products"
+@rendermode InteractiveServer
+@attribute [Authorize]
+@inject OrderApiClient OrderApi
+@implements IDisposable
+
+<PageTitle>Product Catalog</PageTitle>
+
+<h1>Product Catalog – @ProductCatalogRules.ProductName</h1>
+
+<p class="text-muted mb-4">
+    All box configurations are system-defined and read-only. Prices can only be changed via a code migration.
+</p>
+
+@if (_loading)
+{
+    <p><em>Loading...</em></p>
+}
+else
+{
+    @if (_errorMessage is not null)
+    {
+        <div class="alert alert-danger" role="alert">@_errorMessage</div>
+    }
+
+    <div class="row g-4">
+
+        <!-- ── Insulated boxes ─────────────────────────────────────── -->
+        <div class="col-lg-6">
+            <div class="card h-100">
+                <div class="card-header">
+                    <h5 class="mb-0">
+                        <span class="bi bi-box-seam me-2" aria-hidden="true"></span>
+                        Insulated Channel (Direct)
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <p class="card-text text-muted small">
+                        Pound-based pricing · 3 box sizes · base rate $@ProductCatalogRules.InsulatedBasePricePerLb.ToString("0.00")/lb
+                    </p>
+                    <table class="table table-sm table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th>Size</th>
+                                <th class="text-end">Weight</th>
+                                <th class="text-end">Base Price/lb</th>
+                                <th class="text-end">Line Total (1 box)</th>
+                                <th class="text-center">Default</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var box in _insulatedBoxes)
+                            {
+                                <tr class="@(ProductCatalogRules.IsDefaultInsulatedBox(box) ? "table-success" : "")">
+                                    <td>@box.Size</td>
+                                    <td class="text-end">@box.WeightLbs lb</td>
+                                    <td class="text-end">$@box.BasePricePerLb.ToString("0.00")</td>
+                                    <td class="text-end">$@ProductCatalogRules.InsulatedLineTotal(1, box.WeightLbs).ToString("0.00")</td>
+                                    <td class="text-center">
+                                        @if (ProductCatalogRules.IsDefaultInsulatedBox(box))
+                                        {
+                                            <span class="badge bg-success">Default</span>
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- ── FedEx tiers ─────────────────────────────────────────── -->
+        <div class="col-lg-6">
+            <div class="card h-100">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">
+                        <span class="bi bi-truck me-2" aria-hidden="true"></span>
+                        FedEx Channel (Amazon / External)
+                    </h5>
+                    <span class="badge bg-secondary">Read-Only</span>
+                </div>
+                <div class="card-body">
+                    <p class="card-text text-muted small">
+                        Fixed pricing per tier · 8 sizes · prices are non-negotiable
+                    </p>
+                    <table class="table table-sm table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th>Tier</th>
+                                <th class="text-end">Weight</th>
+                                <th class="text-end">Fixed Price</th>
+                                <th class="text-center">Packaging</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var tier in _fedExTiers)
+                            {
+                                <tr>
+                                    <td>@tier.TierSize</td>
+                                    <td class="text-end">@FormatWeight(tier.WeightOz)</td>
+                                    <td class="text-end">$@tier.FixedPrice.ToString("0.00")</td>
+                                    <td class="text-center">
+                                        @if (tier.WeightOz < 32m)
+                                        {
+                                            <span class="badge bg-light text-dark border">Envelope</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="badge bg-secondary">Box</span>
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <div class="alert alert-info mt-4 d-flex align-items-center gap-2" role="alert">
+        <span class="bi bi-info-circle-fill" aria-hidden="true"></span>
+        <span>
+            Insulated and FedEx channels are <strong>non-interchangeable</strong>.
+            A FedEx channel order cannot use insulated box sizes or pricing, and vice-versa.
+        </span>
+    </div>
+}
+
+@code {
+    private InsulatedBoxInfo[] _insulatedBoxes = [];
+    private FedExTierInfo[] _fedExTiers = [];
+    private string? _errorMessage;
+    private bool _loading = true;
+    private readonly CancellationTokenSource _cts = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _insulatedBoxes = await OrderApi.GetInsulatedBoxesAsync(_cts.Token);
+            _fedExTiers     = await OrderApi.GetFedExTiersAsync(_cts.Token);
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"Failed to load product catalog: {ex.Message}";
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private static string FormatWeight(decimal oz) =>
+        oz >= 16m ? $"{oz / 16m:0.##} lb" : $"{oz:0.##} oz";
+
+    public void Dispose() => _cts.Cancel();
+}
