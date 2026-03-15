@@ -147,11 +147,31 @@ public static class OrderInstanceEndpoints
         return Results.Ok(ToDto(instance, boxConfigs));
     }
 
-    internal static async Task CreateInvoiceAsync(OrderInstance instance, CustomerDbContext db)
+    public static async Task CreateInvoiceAsync(OrderInstance instance, CustomerDbContext db)
     {
         var customer = await db.Customers.FindAsync(instance.CustomerId);
         var customerKey = customer?.CustomerKey ?? $"UNK-{instance.CustomerId.ToString()[..4]}";
         var seasonYear  = SeasonYearService.CurrentSeasonYear(instance.ShipDate ?? DateTime.UtcNow);
+
+        // Auto-create a standing order for first-time invoiced customers
+        var hasStandingOrder = await db.StandingOrders.AnyAsync(s => s.CustomerId == instance.CustomerId);
+        if (!hasStandingOrder)
+        {
+            var startWeek = SeasonYearService.MondayOf(instance.ShipDate ?? DateTime.UtcNow);
+            db.StandingOrders.Add(new StandingOrder
+            {
+                Id         = Guid.NewGuid(),
+                CustomerId = instance.CustomerId,
+                ContactId  = instance.ContactId,
+                Frequency  = OrderFrequency.Weekly,
+                IsSample   = false,
+                Status     = StandingOrderStatus.Active,
+                SeasonYear = seasonYear,
+                StartWeek  = startWeek,
+                CreatedAt  = DateTime.UtcNow,
+                CreatedBy  = instance.CreatedBy
+            });
+        }
 
         // Atomic SeekNum assignment: use DB serialisation via EF transaction
         var seekNum = await db.Invoices
