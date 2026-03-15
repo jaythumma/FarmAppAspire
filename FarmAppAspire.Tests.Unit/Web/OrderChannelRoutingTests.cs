@@ -206,4 +206,71 @@ public class OrderChannelRoutingTests
         Assert.Equal(3, result.Length);
         Assert.Contains(result, b => b.Size == "FiveLb");
     }
+
+    // ── GetOrdersAsync – totals deserialization ───────────────────────────────
+
+    [Fact]
+    public async Task GetOrdersAsync_DeserializesTotalQtyAndTotalAmount()
+    {
+        var customerId = Guid.NewGuid();
+        var orders = new[]
+        {
+            new
+            {
+                Id         = Guid.NewGuid(),
+                CustomerId = customerId,
+                Channel    = "Direct",
+                Status     = "Pending",
+                WeekOf     = DateTime.UtcNow,
+                IsSample   = false,
+                TotalQty   = 5,
+                TotalAmount = 325.00m
+            },
+            new
+            {
+                Id         = Guid.NewGuid(),
+                CustomerId = customerId,
+                Channel    = "FedEx",
+                Status     = "Shipped",
+                WeekOf     = DateTime.UtcNow.AddDays(-7),
+                IsSample   = false,
+                TotalQty   = 2,
+                TotalAmount = 90.00m
+            }
+        };
+
+        var (client, getRequest) = BuildClient(new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent(JsonSerializer.Serialize(orders, JsonOptions),
+                System.Text.Encoding.UTF8, "application/json")
+        });
+
+        var result = await client.GetOrdersAsync(customerId, cancellationToken: TestContext.Current.CancellationToken);
+
+        var request = getRequest();
+        Assert.NotNull(request);
+        Assert.Contains($"/customers/{customerId}/order-instances", request.RequestUri!.PathAndQuery);
+        Assert.Equal(2, result.Length);
+        Assert.Equal(5,      result[0].TotalQty);
+        Assert.Equal(325.00m, result[0].TotalAmount);
+        Assert.Equal(2,      result[1].TotalQty);
+        Assert.Equal(90.00m, result[1].TotalAmount);
+    }
+
+    [Fact]
+    public async Task GetOrdersAsync_WithStatusFilter_AppendsStatusQueryParam()
+    {
+        var customerId = Guid.NewGuid();
+
+        var (client, getRequest) = BuildClient(new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent("[]", System.Text.Encoding.UTF8, "application/json")
+        });
+
+        await client.GetOrdersAsync(customerId, status: "Pending", cancellationToken: TestContext.Current.CancellationToken);
+
+        var request = getRequest();
+        Assert.NotNull(request);
+        Assert.Contains("status=Pending", request.RequestUri!.Query);
+    }
 }
