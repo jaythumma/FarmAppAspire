@@ -20,6 +20,17 @@ public class OrderApiClient(HttpClient httpClient)
         return result?.ToArray() ?? [];
     }
 
+    public async Task<AllOrderSummary[]> GetAllOrdersAsync(
+        Guid? customerId = null, string? status = null, CancellationToken cancellationToken = default)
+    {
+        var queryParts = new List<string>();
+        if (customerId.HasValue) queryParts.Add($"customerId={customerId.Value}");
+        if (status is not null) queryParts.Add($"status={Uri.EscapeDataString(status)}");
+        var url = "/order-instances" + (queryParts.Count > 0 ? "?" + string.Join("&", queryParts) : "");
+        var result = await httpClient.GetFromJsonAsync<IEnumerable<AllOrderSummary>>(url, JsonOptions, cancellationToken);
+        return result?.ToArray() ?? [];
+    }
+
     public async Task<OrderDetail?> GetOrderAsync(
         Guid customerId, Guid orderId, CancellationToken cancellationToken = default) =>
         await httpClient.GetFromJsonAsync<OrderDetail>(
@@ -225,6 +236,11 @@ public record StandingOrderDetail(
     DateTime CreatedAt, string CreatedBy);
 
 public record OrderSummary(Guid Id, Guid? StandingOrderId, Guid CustomerId, string Channel, string Status, DateTime WeekOf, bool IsSample, int TotalQty, decimal TotalAmount);
+public record AllOrderSummary(
+    Guid Id, Guid? StandingOrderId, Guid CustomerId,
+    string CustomerDisplayName, string CustomerChannelType, string CustomerType,
+    string Channel, string Status, DateTime WeekOf, bool IsSample,
+    int TotalQty, decimal TotalAmount);
 public record OrderLine(Guid Id, string? BoxSize, int Qty, decimal? EffectivePricePerLb, string? FedExTierSize, decimal? FedExFixedPrice, string? PackagingType);
 public record OrderDetail(Guid Id, Guid? StandingOrderId, Guid CustomerId, string Channel, string Status, DateTime WeekOf, bool IsSample, Guid? ContactId, int TotalQty, decimal TotalAmount, IReadOnlyList<OrderLine> Lines);
 

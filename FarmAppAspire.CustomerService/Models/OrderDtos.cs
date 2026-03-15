@@ -105,3 +105,17 @@ public record WeekInstanceSummary(
     bool IsSample,
     int TotalQty,
     decimal TotalAmount);
+
+public record AllOrdersSummaryDto(
+    Guid Id,
+    Guid? StandingOrderId,
+    Guid CustomerId,
+    string CustomerDisplayName,
+    string CustomerChannelType,
+    string CustomerType,
+    string Channel,
+    string Status,
+    DateTime WeekOf,
+    bool IsSample,
+    int TotalQty,
+    decimal TotalAmount);

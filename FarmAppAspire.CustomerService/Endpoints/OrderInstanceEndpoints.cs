@@ -9,6 +9,48 @@ public static class OrderInstanceEndpoints
 {
     public static IEndpointRouteBuilder MapOrderInstanceEndpoints(this IEndpointRouteBuilder app)
     {
+        const string UnknownCustomerName    = "Unknown";
+        const string FallbackChannelType    = "Direct";
+        const string FallbackCustomerType   = "Retail";
+
+        // ── All-orders endpoint (no customer filter required) ─────────────────
+        app.MapGet("/order-instances", async (CustomerDbContext db,
+            Guid? customerId = null, string? status = null) =>
+        {
+            var q = db.OrderInstances.Include(i => i.Lines).AsQueryable();
+
+            if (customerId.HasValue)
+                q = q.Where(i => i.CustomerId == customerId.Value);
+
+            if (Enum.TryParse<OrderInstanceStatus>(status, ignoreCase: true, out var s))
+                q = q.Where(i => i.Status == s);
+
+            var items = await q.OrderByDescending(i => i.WeekOf).ToListAsync();
+            var boxConfigs = await db.InsulatedBoxConfigs.ToListAsync();
+
+            var customerIds = items.Select(i => i.CustomerId).Distinct().ToList();
+            var customers = await db.Customers
+                .Where(c => customerIds.Contains(c.Id))
+                .Select(c => new { c.Id, c.DisplayName, c.ChannelType, c.Type })
+                .ToListAsync();
+            var customerMap = customers.ToDictionary(c => c.Id);
+
+            var result = items.Select(i =>
+            {
+                var cust = customerMap.GetValueOrDefault(i.CustomerId);
+                var (qty, amount) = PriceResolutionService.ComputeOrderInstanceTotals(i.Lines, boxConfigs);
+                return new AllOrdersSummaryDto(
+                    i.Id, i.StandingOrderId, i.CustomerId,
+                    cust?.DisplayName ?? UnknownCustomerName,
+                    cust?.ChannelType.ToString() ?? FallbackChannelType,
+                    cust?.Type.ToString() ?? FallbackCustomerType,
+                    i.Channel.ToString(), i.Status.ToString(), i.WeekOf, i.IsSample,
+                    qty, amount);
+            }).ToList();
+
+            return Results.Ok(result);
+        }).WithTags("OrderInstances").Produces<IEnumerable<AllOrdersSummaryDto>>();
+
         var g = app.MapGroup("/customers/{customerId:guid}/order-instances").WithTags("OrderInstances");
 
         g.MapGet("/", async (Guid customerId, CustomerDbContext db,
