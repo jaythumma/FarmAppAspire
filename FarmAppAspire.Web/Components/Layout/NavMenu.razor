@@ -38,6 +38,15 @@
                         <span class="bi bi-box-seam-fill" aria-hidden="true"></span> Orders
                     </NavLink>
                 </div>
+                <AuthorizeView Roles="Manager,Staff,FarmAdmin" Context="newOrderCtx">
+                    <Authorized>
+                        <div class="nav-item px-3">
+                            <NavLink class="nav-link" href="orders/new">
+                                <span class="bi bi-plus-circle-fill" aria-hidden="true"></span> New Order
+                            </NavLink>
+                        </div>
+                    </Authorized>
+                </AuthorizeView>
                 <div class="nav-item px-3">
                     <NavLink class="nav-link" href="invoices">
                         <span class="bi bi-receipt" aria-hidden="true"></span> Invoices

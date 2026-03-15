@@ -1,0 +1,357 @@
+@page "/orders/new"
+@rendermode InteractiveServer
+@attribute [Authorize(Roles = "Manager,Staff,FarmAdmin")]
+@inject CustomerApiClient CustomerApi
+@inject OrderApiClient OrderApi
+@implements IDisposable
+
+<PageTitle>New Order</PageTitle>
+
+<h1>New Order</h1>
+
+@if (_successMessage is not null)
+{
+    <div class="alert alert-success alert-dismissible" role="alert">
+        @_successMessage
+        <button type="button" class="btn-close" @onclick="() => _successMessage = null"></button>
+    </div>
+}
+
+@if (_errorMessage is not null)
+{
+    <div class="alert alert-danger alert-dismissible" role="alert">
+        @_errorMessage
+        <button type="button" class="btn-close" @onclick="() => _errorMessage = null"></button>
+    </div>
+}
+
+@if (_loading)
+{
+    <p><em>Loading...</em></p>
+}
+else
+{
+    <EditForm Model="_model" OnValidSubmit="SaveAsync">
+        <DataAnnotationsValidator />
+
+        <div class="mb-3">
+            <label class="form-label fw-semibold">Customer *</label>
+            <select class="form-select" value="@_model.CustomerId"
+                    @onchange="OnCustomerChangedAsync">
+                <option value="">— select customer —</option>
+                @foreach (var c in _customers)
+                {
+                    <option value="@c.Id">@c.DisplayName</option>
+                }
+            </select>
+            @if (_showValidation && string.IsNullOrEmpty(_model.CustomerId))
+            {
+                <div class="text-danger small mt-1">Please select a customer.</div>
+            }
+        </div>
+
+        @if (_customerSelected)
+        {
+            <div class="mb-3">
+                <label class="form-label fw-semibold">Channel *</label>
+                <div class="d-flex gap-3">
+                    <div class="form-check">
+                        <input class="form-check-input" type="radio" id="channelInsulated"
+                               name="channel" value="Insulated"
+                               checked="@(_model.Channel == OrderChannel.Insulated)"
+                               @onchange="() => OnChannelChanged(OrderChannel.Insulated)" />
+                        <label class="form-check-label" for="channelInsulated">Insulated</label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="radio" id="channelFedEx"
+                               name="channel" value="FedEx"
+                               checked="@(_model.Channel == OrderChannel.FedEx)"
+                               @onchange="() => OnChannelChanged(OrderChannel.FedEx)" />
+                        <label class="form-check-label" for="channelFedEx">FedEx</label>
+                    </div>
+                </div>
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label fw-semibold">Contact</label>
+                <select class="form-select" @bind="_model.ContactId">
+                    <option value="">— none —</option>
+                    @foreach (var c in _contacts)
+                    {
+                        <option value="@c.Id">@c.FirstName @c.LastName (@c.Role)</option>
+                    }
+                </select>
+            </div>
+
+            <div class="mb-3 form-check">
+                <InputCheckbox @bind-Value="_model.IsSample" class="form-check-input" id="isSample" />
+                <label class="form-check-label" for="isSample">Sample order</label>
+            </div>
+
+            @if (_model.Channel == OrderChannel.Insulated)
+            {
+                <div class="mb-3">
+                    <label class="form-label fw-semibold">Frequency *</label>
+                    <InputSelect @bind-Value="_model.Frequency" class="form-select">
+                        @foreach (var f in Enum.GetValues<OrderFrequency>().Where(f => f != OrderFrequency.Stopped))
+                        {
+                            <option value="@f">@f</option>
+                        }
+                    </InputSelect>
+                </div>
+
+                @if (_model.Frequency == OrderFrequency.Monthly)
+                {
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Monthly Week *</label>
+                        <InputSelect @bind-Value="_model.MonthlyWeek" class="form-select">
+                            <option value="">— select week —</option>
+                            @foreach (var w in Enum.GetValues<MonthlyWeek>())
+                            {
+                                <option value="@w">@w</option>
+                            }
+                        </InputSelect>
+                    </div>
+                }
+            }
+
+            <h5>Order Lines</h5>
+            @if (_showValidation && !HasValidLines())
+            {
+                <div class="text-danger small mb-2">Add at least one line with quantity > 0.</div>
+            }
+
+            @foreach (var (line, idx) in _model.Lines.Select((l, i) => (l, i)))
+            {
+                <div class="row g-2 mb-2 align-items-center">
+                    <div class="col-auto">
+                        @if (_model.Channel == OrderChannel.Insulated)
+                        {
+                            <label class="form-label visually-hidden">Box Size</label>
+                            <select class="form-select" @bind="line.BoxSize">
+                                @foreach (var box in _boxes)
+                                {
+                                    <option value="@box.Size">@box.Size (@box.WeightLbs lbs – $@box.BasePricePerLb.ToString("0.00")/lb)</option>
+                                }
+                            </select>
+                        }
+                        else
+                        {
+                            <label class="form-label visually-hidden">Tier</label>
+                            <select class="form-select" @bind="line.TierSize">
+                                <option value="">— select tier —</option>
+                                @foreach (var tier in _tiers)
+                                {
+                                    <option value="@tier.TierSize">@tier.TierSize (@tier.WeightOz oz – $@tier.FixedPrice.ToString("0.00"))</option>
+                                }
+                            </select>
+                        }
+                    </div>
+                    <div class="col-2">
+                        <label class="form-label visually-hidden">Qty</label>
+                        <InputNumber @bind-Value="line.Qty" class="form-control" placeholder="Qty" min="1" />
+                    </div>
+                    <div class="col-auto">
+                        @if (_model.Lines.Count > 1)
+                        {
+                            <button type="button" class="btn btn-outline-danger btn-sm"
+                                    @onclick="() => RemoveLine(idx)">Remove</button>
+                        }
+                    </div>
+                </div>
+            }
+
+            <button type="button" class="btn btn-outline-secondary btn-sm mb-3"
+                    @onclick="AddLine">+ Add Line</button>
+
+            <div class="mt-3">
+                <button type="submit" class="btn btn-primary" disabled="@_saving">
+                    @(_saving ? "Saving…" : "Submit")
+                </button>
+            </div>
+        }
+    </EditForm>
+}
+
+@code {
+    private readonly FormModel _model = new();
+    private CustomerSummary[] _customers = [];
+    private ContactDto[] _contacts = [];
+    private FedExTierInfo[] _tiers = [];
+    private InsulatedBoxInfo[] _boxes = [];
+    private bool _customerSelected;
+    private string? _errorMessage;
+    private string? _successMessage;
+    private bool _loading = true;
+    private bool _saving;
+    private bool _showValidation;
+    private readonly CancellationTokenSource _cts = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        _customers = await CustomerApi.GetCustomersAsync(cancellationToken: _cts.Token);
+        _tiers = await OrderApi.GetFedExTiersAsync(_cts.Token);
+        _boxes = await OrderApi.GetInsulatedBoxesAsync(_cts.Token);
+        _loading = false;
+    }
+
+    private async Task OnCustomerChangedAsync(ChangeEventArgs e)
+    {
+        _model.CustomerId = e.Value?.ToString() ?? "";
+        _contacts = [];
+        ResetLines();
+
+        if (Guid.TryParse(_model.CustomerId, out var id))
+        {
+            _customerSelected = true;
+            await LoadContactsAsync(id);
+        }
+        else
+        {
+            _customerSelected = false;
+        }
+    }
+
+    private void OnChannelChanged(OrderChannel channel)
+    {
+        _model.Channel = channel;
+        ResetLines();
+    }
+
+    private void ResetLines()
+    {
+        _model.Lines = [BuildDefaultLine()];
+    }
+
+    private LineModel BuildDefaultLine() =>
+        _model.Channel == OrderChannel.Insulated
+            ? new LineModel { BoxSize = nameof(InsulatedBoxSize.TwelveLb), Qty = 1 }
+            : new LineModel { Qty = 1 };
+
+    private async Task LoadContactsAsync(Guid customerId)
+    {
+        var detail = await CustomerApi.GetCustomerAsync(customerId, _cts.Token);
+        _contacts = detail?.Contacts ?? [];
+    }
+
+    private void AddLine() => _model.Lines.Add(BuildDefaultLine());
+    private void RemoveLine(int idx) => _model.Lines.RemoveAt(idx);
+
+    private bool HasValidLines() =>
+        _model.Lines.Any(l => l.Qty > 0);
+
+    private async Task SaveAsync()
+    {
+        _showValidation = true;
+        _errorMessage = null;
+
+        if (string.IsNullOrEmpty(_model.CustomerId))
+        {
+            _errorMessage = "Please select a customer.";
+            return;
+        }
+
+        if (!Guid.TryParse(_model.CustomerId, out var customerId))
+        {
+            _errorMessage = "Please select a customer.";
+            return;
+        }
+
+        if (!HasValidLines())
+        {
+            _errorMessage = "Add at least one line with quantity > 0.";
+            return;
+        }
+
+        _saving = true;
+
+        try
+        {
+            Guid? contactId = Guid.TryParse(_model.ContactId, out var cid) ? cid : null;
+
+            if (_model.Channel == OrderChannel.Insulated)
+            {
+                if (_model.Frequency == OrderFrequency.Monthly && _model.MonthlyWeek is null)
+                {
+                    _errorMessage = "Monthly week is required for monthly frequency.";
+                    return;
+                }
+
+                var lines = _model.Lines
+                    .Where(l => l.Qty > 0 && !string.IsNullOrEmpty(l.BoxSize))
+                    .Select(l => new StandingOrderLineRequest(Enum.Parse<InsulatedBoxSize>(l.BoxSize), l.Qty))
+                    .ToList();
+
+                await OrderApi.CreateStandingOrderAsync(
+                    customerId,
+                    new CreateStandingOrderRequest(contactId, _model.Frequency, _model.MonthlyWeek, _model.IsSample, lines),
+                    _cts.Token);
+            }
+            else
+            {
+                var lines = _model.Lines
+                    .Where(l => l.Qty > 0 && !string.IsNullOrEmpty(l.TierSize))
+                    .Select(l => new FedExOrderLineRequest(Enum.Parse<FedExTierSize>(l.TierSize), l.Qty))
+                    .ToList();
+
+                await OrderApi.CreateFedExOrderAsync(
+                    customerId,
+                    new CreateFedExOrderRequest(contactId, lines, IsSample: _model.IsSample),
+                    _cts.Token);
+            }
+
+            _successMessage = "Order created successfully.";
+            ResetForm();
+        }
+        catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Conflict)
+        {
+            _errorMessage = "This customer already has an active standing order. Edit it from the customer's Standing Orders page.";
+        }
+        catch (HttpRequestException ex)
+        {
+            _errorMessage = $"Failed to save order: {ex.Message}";
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"Unexpected error: {ex.Message}";
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private void ResetForm()
+    {
+        _model.CustomerId = "";
+        _model.Channel = OrderChannel.Insulated;
+        _model.ContactId = null;
+        _model.IsSample = false;
+        _model.Frequency = OrderFrequency.Weekly;
+        _model.MonthlyWeek = null;
+        _model.Lines = [new LineModel { BoxSize = nameof(InsulatedBoxSize.TwelveLb), Qty = 1 }];
+        _contacts = [];
+        _customerSelected = false;
+        _showValidation = false;
+    }
+
+    public void Dispose() => _cts.Cancel();
+
+    private class FormModel
+    {
+        public string CustomerId { get; set; } = "";
+        public OrderChannel Channel { get; set; } = OrderChannel.Insulated;
+        public string? ContactId { get; set; }
+        public bool IsSample { get; set; }
+        public OrderFrequency Frequency { get; set; } = OrderFrequency.Weekly;
+        public MonthlyWeek? MonthlyWeek { get; set; }
+        public List<LineModel> Lines { get; set; } = [new LineModel { BoxSize = nameof(InsulatedBoxSize.TwelveLb), Qty = 1 }];
+    }
+
+    private class LineModel
+    {
+        public string TierSize { get; set; } = "";
+        public string BoxSize { get; set; } = nameof(InsulatedBoxSize.TwelveLb);
+        public int Qty { get; set; } = 1;
+    }
+}

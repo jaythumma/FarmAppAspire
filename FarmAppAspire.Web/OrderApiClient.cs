@@ -88,6 +88,7 @@ public enum FedExTierSize { OneOz, TwoOz, FourOz, EightOz, OneLb, TwoLb, ThreeLb
 public enum InsulatedBoxSize { FiveLb = 5, TenLb = 10, TwelveLb = 12 }
 public enum OrderFrequency { Weekly, BiWeekly, Monthly, OnRequest, Stopped }
 public enum MonthlyWeek { First = 1, Second = 2, Third = 3, Fourth = 4 }
+public enum OrderChannel { Insulated, FedEx }
 
 public record FedExTierInfo(string TierSize, decimal WeightOz, decimal FixedPrice);
 public record InsulatedBoxInfo(string Size, decimal WeightLbs, decimal BasePricePerLb);
