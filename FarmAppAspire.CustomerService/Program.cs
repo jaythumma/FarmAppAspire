@@ -16,6 +16,7 @@ builder.Services.ConfigureHttpJsonOptions(options =>
     options.SerializerOptions.Converters.Add(new JsonStringEnumConverter()));
 
 builder.AddNpgsqlDbContext<CustomerDbContext>("customer-db");
+builder.Services.AddSingleton<IAddressValidationService, FormatAddressValidationService>();
 
 var app = builder.Build();
 
@@ -103,7 +104,7 @@ customers.MapGet("{id:guid}", async (Guid id, CustomerDbContext db) =>
 });
 
 // POST /customers
-customers.MapPost("", async (CreateCustomerRequest req, CustomerDbContext db, HttpContext ctx) =>
+customers.MapPost("", async (CreateCustomerRequest req, CustomerDbContext db, HttpContext ctx, IAddressValidationService addressValidator) =>
 {
     if (string.IsNullOrWhiteSpace(req.DisplayName))
         return Results.Problem("DisplayName is required.", statusCode: StatusCodes.Status400BadRequest);
@@ -116,6 +117,25 @@ customers.MapPost("", async (CreateCustomerRequest req, CustomerDbContext db, Ht
         string.IsNullOrWhiteSpace(req.ShippingAddress?.PostalCode) ||
         string.IsNullOrWhiteSpace(req.ShippingAddress?.Country))
         return Results.Problem("Shipping address with Line1, City, State, PostalCode, and Country is required.", statusCode: StatusCodes.Status400BadRequest);
+
+    var shippingValidation = await addressValidator.ValidateAsync(
+        req.ShippingAddress.Line1, req.ShippingAddress.Line2,
+        req.ShippingAddress.City, req.ShippingAddress.State,
+        req.ShippingAddress.PostalCode, req.ShippingAddress.Country,
+        ctx.RequestAborted);
+    if (!shippingValidation.IsValid)
+        return Results.Problem(string.Join(" ", shippingValidation.Errors), statusCode: StatusCodes.Status422UnprocessableEntity);
+
+    if (!req.BillingUsesShipping && req.BillingAddress is not null)
+    {
+        var billingValidation = await addressValidator.ValidateAsync(
+            req.BillingAddress.Line1, req.BillingAddress.Line2,
+            req.BillingAddress.City, req.BillingAddress.State,
+            req.BillingAddress.PostalCode, req.BillingAddress.Country,
+            ctx.RequestAborted);
+        if (!billingValidation.IsValid)
+            return Results.Problem(string.Join(" ", billingValidation.Errors), statusCode: StatusCodes.Status422UnprocessableEntity);
+    }
 
     var now = DateTime.UtcNow;
     var userId = ctx.Request.Headers["X-User-Id"].ToString();
@@ -293,9 +313,16 @@ customers.MapGet("{id:guid}/addresses", async (Guid id, CustomerDbContext db) =>
     return Results.Ok(addresses);
 });
 
-customers.MapPost("{id:guid}/addresses", async (Guid id, CreateAddressRequest req, CustomerDbContext db, HttpContext ctx) =>
+customers.MapPost("{id:guid}/addresses", async (Guid id, CreateAddressRequest req, CustomerDbContext db, HttpContext ctx, IAddressValidationService addressValidator) =>
 {
     if (!await db.Customers.AnyAsync(c => c.Id == id)) return Results.NotFound();
+
+    var validation = await addressValidator.ValidateAsync(
+        req.Line1, req.Line2, req.City, req.State, req.PostalCode, req.Country,
+        ctx.RequestAborted);
+    if (!validation.IsValid)
+        return Results.Problem(string.Join(" ", validation.Errors), statusCode: StatusCodes.Status422UnprocessableEntity);
+
     var isFirst = !await db.CustomerAddresses.AnyAsync(a => a.CustomerId == id);
     if (req.IsDefault || isFirst)
         await db.CustomerAddresses.Where(a => a.CustomerId == id).ExecuteUpdateAsync(s => s.SetProperty(a => a.IsDefault, false));
@@ -319,10 +346,17 @@ customers.MapPost("{id:guid}/addresses", async (Guid id, CreateAddressRequest re
     return Results.Created($"/customers/{id}/addresses/{address.Id}", address.ToDto());
 }).AddEndpointFilterFactory(UserIdFilter);
 
-customers.MapPut("{id:guid}/addresses/{aid:guid}", async (Guid id, Guid aid, UpdateAddressRequest req, CustomerDbContext db, HttpContext ctx) =>
+customers.MapPut("{id:guid}/addresses/{aid:guid}", async (Guid id, Guid aid, UpdateAddressRequest req, CustomerDbContext db, HttpContext ctx, IAddressValidationService addressValidator) =>
 {
     var address = await db.CustomerAddresses.FirstOrDefaultAsync(a => a.Id == aid && a.CustomerId == id);
     if (address is null) return Results.NotFound();
+
+    var validation = await addressValidator.ValidateAsync(
+        req.Line1, req.Line2, req.City, req.State, req.PostalCode, req.Country,
+        ctx.RequestAborted);
+    if (!validation.IsValid)
+        return Results.Problem(string.Join(" ", validation.Errors), statusCode: StatusCodes.Status422UnprocessableEntity);
+
     if (req.IsDefault && !address.IsDefault)
         await db.CustomerAddresses.Where(a => a.CustomerId == id).ExecuteUpdateAsync(s => s.SetProperty(a => a.IsDefault, false));
     address.Label = req.Label;
