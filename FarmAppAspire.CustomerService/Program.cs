@@ -124,7 +124,7 @@ customers.MapPost("", async (CreateCustomerRequest req, CustomerDbContext db, Ht
         req.ShippingAddress.PostalCode, req.ShippingAddress.Country,
         ctx.RequestAborted);
     if (!shippingValidation.IsValid)
-        return Results.Problem(string.Join(" ", shippingValidation.Errors), statusCode: StatusCodes.Status422UnprocessableEntity);
+        return Results.Problem(string.Join(" ", shippingValidation.Errors), title: "Address not valid", statusCode: StatusCodes.Status422UnprocessableEntity);
 
     if (!req.BillingUsesShipping && req.BillingAddress is not null)
     {
@@ -134,7 +134,7 @@ customers.MapPost("", async (CreateCustomerRequest req, CustomerDbContext db, Ht
             req.BillingAddress.PostalCode, req.BillingAddress.Country,
             ctx.RequestAborted);
         if (!billingValidation.IsValid)
-            return Results.Problem(string.Join(" ", billingValidation.Errors), statusCode: StatusCodes.Status422UnprocessableEntity);
+            return Results.Problem(string.Join(" ", billingValidation.Errors), title: "Address not valid", statusCode: StatusCodes.Status422UnprocessableEntity);
     }
 
     var now = DateTime.UtcNow;
@@ -321,7 +321,7 @@ customers.MapPost("{id:guid}/addresses", async (Guid id, CreateAddressRequest re
         req.Line1, req.Line2, req.City, req.State, req.PostalCode, req.Country,
         ctx.RequestAborted);
     if (!validation.IsValid)
-        return Results.Problem(string.Join(" ", validation.Errors), statusCode: StatusCodes.Status422UnprocessableEntity);
+        return Results.Problem(string.Join(" ", validation.Errors), title: "Address not valid", statusCode: StatusCodes.Status422UnprocessableEntity);
 
     var isFirst = !await db.CustomerAddresses.AnyAsync(a => a.CustomerId == id);
     if (req.IsDefault || isFirst)
@@ -355,7 +355,7 @@ customers.MapPut("{id:guid}/addresses/{aid:guid}", async (Guid id, Guid aid, Upd
         req.Line1, req.Line2, req.City, req.State, req.PostalCode, req.Country,
         ctx.RequestAborted);
     if (!validation.IsValid)
-        return Results.Problem(string.Join(" ", validation.Errors), statusCode: StatusCodes.Status422UnprocessableEntity);
+        return Results.Problem(string.Join(" ", validation.Errors), title: "Address not valid", statusCode: StatusCodes.Status422UnprocessableEntity);
 
     if (req.IsDefault && !address.IsDefault)
         await db.CustomerAddresses.Where(a => a.CustomerId == id).ExecuteUpdateAsync(s => s.SetProperty(a => a.IsDefault, false));
