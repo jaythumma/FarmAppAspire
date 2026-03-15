@@ -7,7 +7,10 @@
 
 <PageTitle>Invoices</PageTitle>
 
-<h1>Invoices</h1>
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h1 class="mb-0">Invoices</h1>
+    <a href="/orders" class="btn btn-primary">Ship Orders</a>
+</div>
 
 <div class="row g-3 mb-4">
     <div class="col-auto">
@@ -18,6 +21,24 @@
             {
                 <option value="@c.Id">@c.DisplayName</option>
             }
+        </select>
+    </div>
+    <div class="col-auto">
+        <label class="form-label fw-semibold">Season Year</label>
+        <select class="form-select" @bind="_seasonYearFilter" @bind:after="LoadInvoicesAsync">
+            <option value="">All seasons</option>
+            @foreach (var year in _availableSeasonYears)
+            {
+                <option value="@year">@year</option>
+            }
+        </select>
+    </div>
+    <div class="col-auto">
+        <label class="form-label fw-semibold">Channel</label>
+        <select class="form-select" @bind="_channelFilter" @bind:after="LoadInvoicesAsync">
+            <option value="">All channels</option>
+            <option value="Insulated">Insulated</option>
+            <option value="FedEx">FedEx</option>
         </select>
     </div>
     <div class="col-auto align-self-end">
@@ -45,17 +66,22 @@ else if (_invoices is not null)
                     <th>Season</th>
                     <th>Week #</th>
                     <th>Created</th>
+                    <th class="text-end">Actions</th>
                 </tr>
             </thead>
             <tbody>
                 @foreach (var inv in _invoices)
                 {
                     <tr>
-                        <td>@inv.Label</td>
+                        <td><strong>@inv.Label</strong></td>
                         <td>@inv.Channel</td>
                         <td>@inv.SeasonYear</td>
-                        <td>@inv.SeekNum</td>
+                        <td>@inv.SeekNum.ToString("D2")</td>
                         <td>@inv.CreatedAt.ToString("MMM d, yyyy")</td>
+                        <td class="text-end">
+                            <a href="/invoices/@_selectedCustomerId/@inv.Id"
+                               class="btn btn-sm btn-outline-primary">View</a>
+                        </td>
                     </tr>
                 }
             </tbody>
@@ -67,8 +93,13 @@ else if (_invoices is not null)
     private CustomerSummary[] _customers = [];
     private InvoiceSummary[]? _invoices;
     private string _selectedCustomerId = "";
+    private string _seasonYearFilter = "";
+    private string _channelFilter = "";
     private bool _loading;
     private readonly CancellationTokenSource _cts = new();
+
+    private static readonly int[] _availableSeasonYears =
+        Enumerable.Range(DateTime.UtcNow.Year - 3, 5).Reverse().ToArray();
 
     protected override async Task OnInitializedAsync()
     {
@@ -79,7 +110,9 @@ else if (_invoices is not null)
     {
         if (!Guid.TryParse(_selectedCustomerId, out var customerId)) return;
         _loading = true;
-        _invoices = await InvoiceApi.GetInvoicesAsync(customerId, cancellationToken: _cts.Token);
+        int? seasonYear = int.TryParse(_seasonYearFilter, out var y) ? y : null;
+        string? channel = string.IsNullOrEmpty(_channelFilter) ? null : _channelFilter;
+        _invoices = await InvoiceApi.GetInvoicesAsync(customerId, seasonYear, channel, _cts.Token);
         _loading = false;
     }
 
