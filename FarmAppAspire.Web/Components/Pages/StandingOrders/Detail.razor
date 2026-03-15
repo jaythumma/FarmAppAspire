@@ -1,0 +1,520 @@
+@page "/standing-orders/{CustomerId:guid}/{SoId:guid}"
+@page "/standing-orders/{CustomerId:guid}/{SoId:guid}/edit"
+@rendermode InteractiveServer
+@attribute [Authorize]
+@inject CustomerApiClient CustomerApi
+@inject OrderApiClient OrderApi
+@inject NavigationManager Nav
+@implements IDisposable
+
+<PageTitle>@(IsEdit ? "Edit Standing Order" : "Standing Order")</PageTitle>
+
+@if (_loading)
+{
+    <p><em>Loading...</em></p>
+}
+else if (_so is null)
+{
+    <div class="alert alert-warning">Standing order not found.</div>
+    <a href="/standing-orders" class="btn btn-secondary">Back</a>
+}
+else
+{
+    <div class="d-flex align-items-center gap-2 mb-3">
+        <h1 class="mb-0">
+            @if (IsEdit) { <span>Edit Standing Order</span> }
+            else { <span>Standing Order</span> }
+        </h1>
+        <span class="badge @StandingOrderRules.StatusBadgeClass(_so.Status) fs-6">@_so.Status</span>
+        <a href="/standing-orders" class="btn btn-sm btn-outline-secondary ms-auto">← Back</a>
+    </div>
+
+    @if (_errorMessage is not null)
+    {
+        <div class="alert alert-danger alert-dismissible" role="alert">
+            @_errorMessage
+            <button type="button" class="btn-close" @onclick="() => _errorMessage = null"></button>
+        </div>
+    }
+    @if (_successMessage is not null)
+    {
+        <div class="alert alert-success alert-dismissible" role="alert">
+            @_successMessage
+            <button type="button" class="btn-close" @onclick="() => _successMessage = null"></button>
+        </div>
+    }
+
+    @if (IsEdit && StandingOrderRules.CanEdit(_so.Status))
+    {
+        <!-- Edit form -->
+        <div class="card mb-4">
+            <div class="card-header"><h5 class="mb-0">Edit Standing Order</h5></div>
+            <div class="card-body">
+                <EditForm Model="_editModel" OnValidSubmit="SaveEditAsync">
+                    <DataAnnotationsValidator />
+
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-4">
+                            <label class="form-label fw-semibold">Frequency</label>
+                            <InputSelect @bind-Value="_editModel.Frequency" class="form-select">
+                                @foreach (var f in Enum.GetValues<OrderFrequency>().Where(f => f != OrderFrequency.Stopped))
+                                {
+                                    <option value="@f">@f</option>
+                                }
+                            </InputSelect>
+                        </div>
+                        @if (_editModel.Frequency == OrderFrequency.Monthly)
+                        {
+                            <div class="col-md-4">
+                                <label class="form-label fw-semibold">Monthly Week</label>
+                                <InputSelect @bind-Value="_editModel.MonthlyWeek" class="form-select">
+                                    <option value="">— select —</option>
+                                    @foreach (var w in Enum.GetValues<MonthlyWeek>())
+                                    {
+                                        <option value="@w">@w</option>
+                                    }
+                                </InputSelect>
+                            </div>
+                        }
+                        <div class="col-md-4">
+                            <label class="form-label fw-semibold">Contact</label>
+                            <select class="form-select" @bind="_editModel.ContactId">
+                                <option value="">— none —</option>
+                                @foreach (var c in _contacts)
+                                {
+                                    <option value="@c.Id">@c.FirstName @c.LastName (@c.Role)</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="col-md-4 d-flex align-items-end">
+                            <div class="form-check">
+                                <InputCheckbox @bind-Value="_editModel.IsSample" class="form-check-input" id="editIsSample" />
+                                <label class="form-check-label" for="editIsSample">Sample order</label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <h6>Order Lines</h6>
+                    @foreach (var (line, idx) in _editModel.Lines.Select((l, i) => (l, i)))
+                    {
+                        <div class="row g-2 mb-2 align-items-center">
+                            <div class="col-auto">
+                                <select class="form-select" @bind="line.BoxSize">
+                                    <option value="">— box —</option>
+                                    @foreach (var box in _boxes)
+                                    {
+                                        <option value="@box.Size">@box.Size (@box.WeightLbs lb)</option>
+                                    }
+                                </select>
+                            </div>
+                            <div class="col-2">
+                                <InputNumber @bind-Value="line.Qty" class="form-control" placeholder="Qty" min="1" />
+                            </div>
+                            @if (_editModel.Lines.Count > 1)
+                            {
+                                <div class="col-auto">
+                                    <button type="button" class="btn btn-outline-danger btn-sm"
+                                            @onclick="() => RemoveLine(idx)">Remove</button>
+                                </div>
+                            }
+                        </div>
+                    }
+                    <button type="button" class="btn btn-outline-secondary btn-sm mb-3"
+                            @onclick="AddLine">+ Add Line</button>
+
+                    <div class="d-flex gap-2 mt-2">
+                        <button type="submit" class="btn btn-primary" disabled="@_saving">
+                            @(_saving ? "Saving…" : "Save Changes")
+                        </button>
+                        <a href="/standing-orders/@CustomerId/@SoId" class="btn btn-secondary">Cancel</a>
+                    </div>
+                </EditForm>
+            </div>
+        </div>
+    }
+    else
+    {
+        <!-- Read-only detail view -->
+        <div class="row mb-4">
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header"><h5 class="mb-0">Details</h5></div>
+                    <div class="card-body">
+                        <dl class="row mb-0">
+                            <dt class="col-sm-5">Frequency</dt>
+                            <dd class="col-sm-7">@_so.Frequency @(_so.MonthlyWeek is not null ? $"({_so.MonthlyWeek})" : "")</dd>
+                            <dt class="col-sm-5">Start Week</dt>
+                            <dd class="col-sm-7">@_so.StartWeek.ToString("MMM d, yyyy")</dd>
+                            <dt class="col-sm-5">Season Year</dt>
+                            <dd class="col-sm-7">@_so.SeasonYear</dd>
+                            <dt class="col-sm-5">Sample</dt>
+                            <dd class="col-sm-7">@(_so.IsSample ? "Yes" : "No")</dd>
+                            <dt class="col-sm-5">Total Boxes</dt>
+                            <dd class="col-sm-7">@_so.TotalBoxes</dd>
+                            <dt class="col-sm-5">Total Weight</dt>
+                            <dd class="col-sm-7">@_so.TotalWeightLbs.ToString("0.0") lb</dd>
+                            <dt class="col-sm-5">Total Amount</dt>
+                            <dd class="col-sm-7">@_so.TotalAmount.ToString("C")</dd>
+                            <dt class="col-sm-5">Created</dt>
+                            <dd class="col-sm-7">@_so.CreatedAt.ToString("MMM d, yyyy") by @_so.CreatedBy</dd>
+                        </dl>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header"><h5 class="mb-0">Order Lines</h5></div>
+                    <div class="card-body p-0">
+                        <table class="table table-sm mb-0">
+                            <thead>
+                                <tr>
+                                    <th>Box Size</th>
+                                    <th class="text-center">Qty</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var line in _so.Lines)
+                                {
+                                    <tr>
+                                        <td>@line.BoxSize</td>
+                                        <td class="text-center">@line.Qty</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Status actions -->
+        <div class="d-flex gap-2 mb-4 flex-wrap">
+            @if (StandingOrderRules.CanEdit(_so.Status))
+            {
+                <a href="/standing-orders/@CustomerId/@SoId/edit" class="btn btn-outline-primary">Edit</a>
+            }
+            @if (StandingOrderRules.CanPause(_so.Status))
+            {
+                <button class="btn btn-outline-warning" @onclick="PauseAsync">Pause</button>
+            }
+            @if (StandingOrderRules.CanResume(_so.Status))
+            {
+                <button class="btn btn-outline-success" @onclick="ResumeAsync">Resume</button>
+            }
+            @if (StandingOrderRules.CanStop(_so.Status))
+            {
+                <button class="btn btn-outline-danger" @onclick="StopAsync">Stop</button>
+            }
+        </div>
+    }
+
+    <!-- Skip weeks panel -->
+    @if (!IsEdit)
+    {
+        <div class="card mb-4">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">Skip Weeks</h5>
+                @if (StandingOrderRules.CanEdit(_so.Status))
+                {
+                    <button class="btn btn-sm btn-outline-secondary" @onclick="ToggleSkipForm">
+                        @(_showSkipForm ? "Cancel" : "+ Add Skip Week")
+                    </button>
+                }
+            </div>
+            <div class="card-body">
+                @if (_showSkipForm)
+                {
+                    <div class="row g-2 align-items-end mb-3">
+                        <div class="col-auto">
+                            <label class="form-label fw-semibold">Week Of (Monday)</label>
+                            <InputDate @bind-Value="_skipWeekOf" class="form-control" />
+                        </div>
+                        <div class="col-auto">
+                            @{
+                                var canSkip = StandingOrderRules.CanAddSkip(_skipWeekOf, DateTime.UtcNow);
+                            }
+                            <button class="btn btn-primary" disabled="@(!canSkip || _saving)"
+                                    @onclick="AddSkipAsync">
+                                Add Skip
+                            </button>
+                            @if (!canSkip)
+                            {
+                                <div class="text-danger small mt-1">
+                                    Skip cutoff has passed for this week (must submit before Friday).
+                                </div>
+                            }
+                        </div>
+                    </div>
+                }
+
+                @if (_so.Skips.Count == 0)
+                {
+                    <p class="text-muted mb-0">No weeks skipped.</p>
+                }
+                else
+                {
+                    <table class="table table-sm mb-0">
+                        <thead>
+                            <tr><th>Skipped Week</th></tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var skip in _so.Skips.OrderBy(s => s.WeekOf))
+                            {
+                                <tr>
+                                    <td>@skip.WeekOf.ToString("MMM d, yyyy")</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                }
+            </div>
+        </div>
+
+        <!-- Linked instances (order schedule) -->
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Order Schedule (Instances)</h5>
+            </div>
+            <div class="card-body">
+                @if (_instances is null)
+                {
+                    <p><em>Loading instances…</em></p>
+                }
+                else if (!_instances.Any())
+                {
+                    <p class="text-muted mb-0">No order instances yet.</p>
+                }
+                else
+                {
+                    <table class="table table-sm table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th>Week Of</th>
+                                <th>Status</th>
+                                <th class="text-center">Qty</th>
+                                <th class="text-end">Amount</th>
+                                <th>Sample</th>
+                                <th class="text-end">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var inst in _instances.OrderByDescending(i => i.WeekOf))
+                            {
+                                <tr>
+                                    <td>@inst.WeekOf.ToString("MMM d, yyyy")</td>
+                                    <td>
+                                        <span class="badge @OrderLifecycleRules.StatusBadgeClass(inst.Status)">
+                                            @inst.Status
+                                        </span>
+                                    </td>
+                                    <td class="text-center">@inst.TotalQty</td>
+                                    <td class="text-end">@inst.TotalAmount.ToString("C")</td>
+                                    <td>@(inst.IsSample ? "Yes" : "No")</td>
+                                    <td class="text-end">
+                                        @if (OrderLifecycleRules.CanHarvest(inst.Status))
+                                        {
+                                            <button class="btn btn-sm btn-outline-info me-1"
+                                                    @onclick="() => HarvestAsync(inst)">Harvest</button>
+                                        }
+                                        @if (OrderLifecycleRules.CanInspect(inst.Status))
+                                        {
+                                            <button class="btn btn-sm btn-outline-primary me-1"
+                                                    @onclick="() => InspectAsync(inst)">Inspect</button>
+                                        }
+                                        @if (OrderLifecycleRules.CanShip(inst.Status))
+                                        {
+                                            <button class="btn btn-sm btn-outline-success me-1"
+                                                    @onclick="() => ShipAsync(inst)">Ship</button>
+                                        }
+                                        @if (OrderLifecycleRules.CanCancel(inst.Status))
+                                        {
+                                            <button class="btn btn-sm btn-outline-danger"
+                                                    @onclick="() => CancelInstanceAsync(inst)">Cancel</button>
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                }
+            </div>
+        </div>
+    }
+}
+
+@code {
+    [Parameter] public Guid CustomerId { get; set; }
+    [Parameter] public Guid SoId { get; set; }
+
+    private bool IsEdit => Nav.Uri.EndsWith("/edit", StringComparison.OrdinalIgnoreCase);
+
+    private StandingOrderDetail? _so;
+    private OrderSummary[]? _instances;
+    private ContactDto[] _contacts = [];
+    private InsulatedBoxInfo[] _boxes = [];
+    private bool _loading = true;
+    private bool _saving;
+    private bool _showSkipForm;
+    private DateTime _skipWeekOf = DateTime.Today;
+    private string? _errorMessage;
+    private string? _successMessage;
+    private readonly CancellationTokenSource _cts = new();
+
+    private readonly EditModel _editModel = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        _so = await OrderApi.GetStandingOrderAsync(CustomerId, SoId, _cts.Token);
+        if (_so is not null)
+        {
+            _instances = await OrderApi.GetOrdersAsync(CustomerId, cancellationToken: _cts.Token);
+            _instances = _instances.Where(i => i.StandingOrderId == SoId).ToArray();
+            _boxes = await OrderApi.GetInsulatedBoxesAsync(_cts.Token);
+            var detail = await CustomerApi.GetCustomerAsync(CustomerId, _cts.Token);
+            _contacts = detail?.Contacts ?? [];
+
+            if (IsEdit) PopulateEditModel();
+        }
+        _loading = false;
+    }
+
+    private void PopulateEditModel()
+    {
+        if (_so is null) return;
+        _editModel.Frequency   = Enum.TryParse<OrderFrequency>(_so.Frequency, out var f) ? f : OrderFrequency.Weekly;
+        _editModel.MonthlyWeek = Enum.TryParse<MonthlyWeek>(_so.MonthlyWeek, out var mw) ? mw : null;
+        _editModel.IsSample    = _so.IsSample;
+        _editModel.ContactId   = _so.ContactId?.ToString();
+        _editModel.Lines       = _so.Lines.Select(l => new LineModel { BoxSize = l.BoxSize, Qty = l.Qty }).ToList();
+        if (_editModel.Lines.Count == 0) _editModel.Lines.Add(new LineModel());
+    }
+
+    private void AddLine() => _editModel.Lines.Add(new LineModel());
+    private void RemoveLine(int idx) => _editModel.Lines.RemoveAt(idx);
+    private void ToggleSkipForm() => _showSkipForm = !_showSkipForm;
+
+    private async Task SaveEditAsync()
+    {
+        _errorMessage = null;
+        _saving = true;
+        try
+        {
+            if (_editModel.Lines.Any(l => string.IsNullOrEmpty(l.BoxSize) || l.Qty < 1))
+            {
+                _errorMessage = "All lines must have a box size and quantity of at least 1.";
+                return;
+            }
+            if (_editModel.Frequency == OrderFrequency.Monthly && _editModel.MonthlyWeek is null)
+            {
+                _errorMessage = "Monthly week is required for monthly frequency.";
+                return;
+            }
+
+            Guid? contactId = Guid.TryParse(_editModel.ContactId, out var cid) ? cid : null;
+            var lines = _editModel.Lines
+                .Select(l => new StandingOrderLineRequest(Enum.Parse<InsulatedBoxSize>(l.BoxSize), l.Qty))
+                .ToList();
+
+            var updated = await OrderApi.UpdateStandingOrderAsync(CustomerId, SoId,
+                new WebUpdateStandingOrderRequest(
+                    _editModel.Frequency, _editModel.MonthlyWeek, _editModel.IsSample, contactId, lines),
+                _cts.Token);
+
+            if (updated is not null)
+            {
+                _so = updated;
+                Nav.NavigateTo($"/standing-orders/{CustomerId}/{SoId}");
+            }
+        }
+        catch (HttpRequestException ex)
+        {
+            _errorMessage = $"Failed to save: {ex.Message}";
+        }
+        finally { _saving = false; }
+    }
+
+    private async Task PauseAsync()
+    {
+        var ok = await OrderApi.PauseStandingOrderAsync(CustomerId, SoId, _cts.Token);
+        if (ok) { _so = await OrderApi.GetStandingOrderAsync(CustomerId, SoId, _cts.Token); _successMessage = "Paused."; }
+        else _errorMessage = "Failed to pause.";
+    }
+
+    private async Task ResumeAsync()
+    {
+        var ok = await OrderApi.ResumeStandingOrderAsync(CustomerId, SoId, _cts.Token);
+        if (ok) { _so = await OrderApi.GetStandingOrderAsync(CustomerId, SoId, _cts.Token); _successMessage = "Resumed."; }
+        else _errorMessage = "Failed to resume.";
+    }
+
+    private async Task StopAsync()
+    {
+        var ok = await OrderApi.StopStandingOrderAsync(CustomerId, SoId, _cts.Token);
+        if (ok) { _so = await OrderApi.GetStandingOrderAsync(CustomerId, SoId, _cts.Token); _successMessage = "Stopped."; }
+        else _errorMessage = "Failed to stop.";
+    }
+
+    private async Task AddSkipAsync()
+    {
+        _errorMessage = null;
+        var ok = await OrderApi.AddSkipWeekAsync(CustomerId, SoId, _skipWeekOf, _cts.Token);
+        if (ok)
+        {
+            _showSkipForm = false;
+            _successMessage = $"Skip added for {_skipWeekOf:MMM d, yyyy}.";
+            _so = await OrderApi.GetStandingOrderAsync(CustomerId, SoId, _cts.Token);
+        }
+        else _errorMessage = "Failed to add skip week (cutoff may have passed).";
+    }
+
+    private async Task HarvestAsync(OrderSummary inst)
+    {
+        var result = await OrderApi.HarvestOrderAsync(CustomerId, inst.Id, _cts.Token);
+        if (result is not null) { await RefreshInstancesAsync(); _successMessage = "Marked as Harvested."; }
+        else _errorMessage = "Failed to harvest.";
+    }
+
+    private async Task InspectAsync(OrderSummary inst)
+    {
+        var result = await OrderApi.InspectOrderAsync(CustomerId, inst.Id, DateTime.UtcNow, _cts.Token);
+        if (result is not null) { await RefreshInstancesAsync(); _successMessage = "Marked as Inspected."; }
+        else _errorMessage = "Inspect failed — inspection must occur on a Friday or Monday.";
+    }
+
+    private async Task ShipAsync(OrderSummary inst)
+    {
+        var result = await OrderApi.ShipOrderAsync(CustomerId, inst.Id, _cts.Token);
+        if (result is not null) { await RefreshInstancesAsync(); _successMessage = "Marked as Shipped."; }
+        else _errorMessage = "Failed to ship.";
+    }
+
+    private async Task CancelInstanceAsync(OrderSummary inst)
+    {
+        var ok = await OrderApi.CancelOrderAsync(CustomerId, inst.Id, _cts.Token);
+        if (ok) { await RefreshInstancesAsync(); _successMessage = "Instance cancelled."; }
+        else _errorMessage = "Failed to cancel.";
+    }
+
+    private async Task RefreshInstancesAsync()
+    {
+        var all = await OrderApi.GetOrdersAsync(CustomerId, cancellationToken: _cts.Token);
+        _instances = all.Where(i => i.StandingOrderId == SoId).ToArray();
+    }
+
+    public void Dispose() => _cts.Cancel();
+
+    private class EditModel
+    {
+        public OrderFrequency Frequency { get; set; } = OrderFrequency.Weekly;
+        public MonthlyWeek? MonthlyWeek { get; set; }
+        public bool IsSample { get; set; }
+        public string? ContactId { get; set; }
+        public List<LineModel> Lines { get; set; } = [new LineModel()];
+    }
+
+    private class LineModel
+    {
+        public string BoxSize { get; set; } = "";
+        public int Qty { get; set; } = 1;
+    }
+}
