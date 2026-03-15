@@ -1,134 +1,271 @@
 @page "/admin/orders"
 @rendermode InteractiveServer
 @attribute [Authorize(Roles = "FarmAdmin")]
-@inject CustomerApiClient CustomerApi
 @inject OrderApiClient OrderApi
 @implements IDisposable
 
-<PageTitle>Order Admin</PageTitle>
+<PageTitle>Order Instance Administration</PageTitle>
 
-<h1>Order Admin</h1>
+<h1>Order Instance Administration</h1>
+<p class="text-muted mb-4">Generate weekly order instances from active standing orders, or browse existing instances by week.</p>
 
-<div class="row g-3 mb-4">
-    <div class="col-auto">
-        <label class="form-label fw-semibold">Customer</label>
-        <select class="form-select" @bind="_selectedCustomerId">
-            <option value="">— select customer —</option>
-            @foreach (var c in _customers)
-            {
-                <option value="@c.Id">@c.DisplayName</option>
-            }
-        </select>
-    </div>
-    <div class="col-auto">
-        <label class="form-label fw-semibold">Status</label>
-        <select class="form-select" @bind="_statusFilter">
-            <option value="">All</option>
-            <option>Pending</option>
-            <option>Harvested</option>
-            <option>Inspected</option>
-            <option>Shipped</option>
-            <option>Cancelled</option>
-        </select>
-    </div>
-    <div class="col-auto align-self-end">
-        <button class="btn btn-primary" @onclick="LoadOrdersAsync">Search</button>
+@* ── Generate Instances ──────────────────────────────────────────────────── *@
+<div class="card mb-4">
+    <div class="card-header"><h5 class="mb-0">Generate Instances</h5></div>
+    <div class="card-body">
+        <div class="row g-3 align-items-end">
+            <div class="col-auto">
+                <label class="form-label fw-semibold">Pick any date in the target week</label>
+                <InputDate @bind-Value="_generateDate"
+                           class="form-control"
+                           @bind-Value:after="OnGenerateDateChanged" />
+            </div>
+            <div class="col-auto align-self-end pb-1">
+                @if (_generateDate != default)
+                {
+                    <span class="text-muted">
+                        Will generate for week of <strong>@SnapToMonday(_generateDate).ToString("ddd, MMM d, yyyy")</strong>
+                    </span>
+                }
+            </div>
+            <div class="col-auto align-self-end">
+                <button class="btn btn-primary"
+                        disabled="@(_generating || _generateDate == default)"
+                        @onclick="GenerateAsync">
+                    @if (_generating)
+                    {
+                        <span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>
+                        <span>Generating…</span>
+                    }
+                    else
+                    {
+                        <span>Generate Instances</span>
+                    }
+                </button>
+            </div>
+        </div>
+
+        @if (_generateError is not null)
+        {
+            <div class="alert alert-danger mt-3 mb-0">@_generateError</div>
+        }
     </div>
 </div>
 
-@if (_errorMessage is not null)
+@* ── Generation Result ───────────────────────────────────────────────────── *@
+@if (_generateResult is not null)
 {
-    <div class="alert alert-danger alert-dismissible" role="alert">
-        @_errorMessage
-        <button type="button" class="btn-close" @onclick="() => _errorMessage = null"></button>
+    <div class="card mb-4 @(_generateResult.GeneratedCount > 0 ? "border-success" : "border-secondary")">
+        <div class="card-header @(_generateResult.GeneratedCount > 0 ? "bg-success text-white" : "bg-secondary text-white")">
+            <div class="d-flex align-items-center gap-3">
+                <span class="fs-5">
+                    @(_generateResult.GeneratedCount > 0 ? "✅" : "ℹ️")
+                    Week of <strong>@_generateResult.WeekOf.ToString("ddd, MMM d, yyyy")</strong>
+                </span>
+                <span class="badge bg-light @(_generateResult.GeneratedCount > 0 ? "text-success" : "text-secondary") fs-6 ms-auto">
+                    @_generateResult.GeneratedCount created
+                </span>
+                <span class="badge bg-dark text-light fs-6">@_generateResult.SkippedCount skipped</span>
+            </div>
+        </div>
+        @if (_generateResult.Instances.Any())
+        {
+            <div class="card-body p-0">
+                <table class="table table-sm table-hover mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Customer Key</th>
+                            <th>Customer</th>
+                            <th>Channel</th>
+                            <th class="text-center">Qty</th>
+                            <th class="text-end">Amount</th>
+                            <th class="text-center">Sample</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var inst in _generateResult.Instances)
+                        {
+                            <tr>
+                                <td>
+                                    @if (!string.IsNullOrEmpty(inst.CustomerKey))
+                                    {
+                                        <span class="fw-bold font-monospace text-primary">@inst.CustomerKey</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted small fst-italic">No key</span>
+                                    }
+                                </td>
+                                <td><a href="/customers/@inst.CustomerId">@inst.CustomerDisplayName</a></td>
+                                <td>@inst.Channel</td>
+                                <td class="text-center">@inst.TotalQty</td>
+                                <td class="text-end">@inst.TotalAmount.ToString("C")</td>
+                                <td class="text-center">@(inst.IsSample ? "Yes" : "—")</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+        else
+        {
+            <div class="card-body text-muted fst-italic">
+                No new instances were created — all already existed, or no active standing orders matched.
+            </div>
+        }
     </div>
 }
 
-@if (_loading)
-{
-    <p><em>Loading...</em></p>
-}
-else if (_orders is not null)
-{
-    @if (!_orders.Any())
-    {
-        <p>No orders found.</p>
-    }
-    else
-    {
-        <table class="table table-hover">
-            <thead>
-                <tr>
-                    <th>Week Of</th>
-                    <th>Channel</th>
-                    <th>Status</th>
-                    <th>Qty</th>
-                    <th class="text-end">Amount</th>
-                    <th>Sample</th>
-                    <th></th>
-                </tr>
-            </thead>
-            <tbody>
-                @foreach (var o in _orders)
-                {
-                    <tr>
-                        <td>@o.WeekOf.ToString("MMM d, yyyy")</td>
-                        <td>@o.Channel</td>
-                        <td><span class="badge bg-secondary">@o.Status</span></td>
-                        <td>@o.TotalQty</td>
-                        <td class="text-end">@o.TotalAmount.ToString("C")</td>
-                        <td>@(o.IsSample ? "Yes" : "No")</td>
-                        <td>
-                            @if (o.Status == "Pending")
-                            {
-                                <button class="btn btn-sm btn-outline-danger"
-                                        @onclick="() => CancelOrderAsync(o)">
-                                    Cancel
-                                </button>
-                            }
-                        </td>
-                    </tr>
-                }
-            </tbody>
-        </table>
-    }
-}
+@* ── Browse Instances by Week ────────────────────────────────────────────── *@
+<div class="card">
+    <div class="card-header">
+        <div class="d-flex align-items-center gap-3">
+            <h5 class="mb-0">Browse Instances by Week</h5>
+            <div class="ms-auto d-flex align-items-center gap-2">
+                <button class="btn btn-sm btn-outline-secondary" @onclick="PreviousWeek">‹ Prev</button>
+                <span class="fw-semibold px-2">@SnapToMonday(_browseDate).ToString("ddd, MMM d, yyyy")</span>
+                <button class="btn btn-sm btn-outline-secondary" @onclick="NextWeek">Next ›</button>
+            </div>
+        </div>
+    </div>
+    <div class="card-body p-0">
+        @if (_browseLoading)
+        {
+            <div class="p-3"><em>Loading...</em></div>
+        }
+        else if (_browseInstances is not null)
+        {
+            @if (!_browseInstances.Any())
+            {
+                <div class="p-3 text-muted fst-italic">No instances for this week.</div>
+            }
+            else
+            {
+                <table class="table table-sm table-hover mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Customer Key</th>
+                            <th>Customer</th>
+                            <th>Channel</th>
+                            <th>Status</th>
+                            <th class="text-center">Qty</th>
+                            <th class="text-end">Amount</th>
+                            <th class="text-center">Sample</th>
+                            <th class="text-end">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var inst in _browseInstances)
+                        {
+                            <tr>
+                                <td>
+                                    @if (!string.IsNullOrEmpty(inst.CustomerKey))
+                                    {
+                                        <span class="fw-bold font-monospace text-primary">@inst.CustomerKey</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted small fst-italic">No key</span>
+                                    }
+                                </td>
+                                <td><a href="/customers/@inst.CustomerId">@inst.CustomerDisplayName</a></td>
+                                <td>@inst.Channel</td>
+                                <td>
+                                    <span class="badge @StatusBadgeClass(inst.Status)">@inst.Status</span>
+                                </td>
+                                <td class="text-center">@inst.TotalQty</td>
+                                <td class="text-end">@inst.TotalAmount.ToString("C")</td>
+                                <td class="text-center">@(inst.IsSample ? "Yes" : "—")</td>
+                                <td class="text-end">
+                                    <a href="/orders/@inst.CustomerId/@inst.InstanceId/edit"
+                                       class="btn btn-sm btn-outline-primary">View</a>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+        }
+    </div>
+</div>
 
 @code {
-    private CustomerSummary[] _customers = [];
-    private OrderSummary[]? _orders;
-    private string _selectedCustomerId = "";
-    private string _statusFilter = "";
-    private string? _errorMessage;
-    private bool _loading;
+    private DateTime _generateDate = DateTime.Today;
+    private bool _generating;
+    private string? _generateError;
+    private GenerateInstancesResponse? _generateResult;
+
+    private DateTime _browseDate = DateTime.Today;
+    private WeekInstanceSummary[]? _browseInstances;
+    private bool _browseLoading;
+
     private readonly CancellationTokenSource _cts = new();
 
     protected override async Task OnInitializedAsync()
     {
-        _customers = await CustomerApi.GetCustomersAsync(cancellationToken: _cts.Token);
+        _generateDate = DateTime.Today;
+        _browseDate   = DateTime.Today;
+        await LoadBrowseAsync();
     }
 
-    private async Task LoadOrdersAsync()
+    private void OnGenerateDateChanged()
     {
-        if (!Guid.TryParse(_selectedCustomerId, out var customerId)) return;
-        _loading = true;
-        _errorMessage = null;
-        _orders = await OrderApi.GetOrdersAsync(
-            customerId,
-            _statusFilter.Length > 0 ? _statusFilter : null,
-            _cts.Token);
-        _loading = false;
+        _generateDate = SnapToMonday(_generateDate);
     }
 
-    private async Task CancelOrderAsync(OrderSummary order)
+    private static DateTime SnapToMonday(DateTime date)
     {
-        if (!Guid.TryParse(_selectedCustomerId, out var customerId)) return;
-        var success = await OrderApi.CancelOrderAsync(customerId, order.Id, _cts.Token);
-        if (success)
-            await LoadOrdersAsync();
-        else
-            _errorMessage = $"Failed to cancel order {order.Id}.";
+        var days = ((int)date.DayOfWeek - (int)DayOfWeek.Monday + 7) % 7;
+        return date.Date.AddDays(-days);
     }
+
+    private async Task GenerateAsync()
+    {
+        _generating     = true;
+        _generateError  = null;
+        _generateResult = null;
+
+        _generateResult = await OrderApi.GenerateInstancesAsync(
+            SnapToMonday(_generateDate), _cts.Token);
+
+        if (_generateResult is null)
+            _generateError = "Generation failed — check that the service is running and you have the X-User-Id header configured.";
+
+        _generating = false;
+
+        _browseDate = _generateDate;
+        await LoadBrowseAsync();
+    }
+
+    private async Task PreviousWeek()
+    {
+        _browseDate = SnapToMonday(_browseDate).AddDays(-7);
+        await LoadBrowseAsync();
+    }
+
+    private async Task NextWeek()
+    {
+        _browseDate = SnapToMonday(_browseDate).AddDays(7);
+        await LoadBrowseAsync();
+    }
+
+    private async Task LoadBrowseAsync()
+    {
+        _browseLoading   = true;
+        _browseInstances = await OrderApi.BrowseWeekInstancesAsync(
+            SnapToMonday(_browseDate), _cts.Token);
+        _browseLoading   = false;
+    }
+
+    private static string StatusBadgeClass(string status) => status switch
+    {
+        "Pending"   => "bg-secondary",
+        "Harvested" => "bg-info text-dark",
+        "Inspected" => "bg-primary",
+        "Shipped"   => "bg-success",
+        "Cancelled" => "bg-danger",
+        _           => "bg-light text-dark"
+    };
 
     public void Dispose() => _cts.Cancel();
 }

@@ -22,6 +22,73 @@ else
         </AuthorizeView>
     </div>
 
+    @* ── Customer Key Banner ─────────────────────────────────────────────── *@
+    <div class="card mb-4 border-primary">
+        <div class="card-body py-3">
+            <div class="d-flex align-items-center gap-3 flex-wrap">
+                <div>
+                    <span class="text-muted small text-uppercase fw-semibold letter-spacing-1">Customer Key</span>
+                    @if (!string.IsNullOrEmpty(_customer.CustomerKey))
+                    {
+                        <div class="d-flex align-items-center gap-2 mt-1">
+                            <span class="fw-bold font-monospace fs-3 text-primary">@_customer.CustomerKey</span>
+                            @if (_customer.CustomerKeyCollision)
+                            {
+                                <span class="badge bg-warning text-dark fs-6" title="This key is in use by another customer — resolve manually">
+                                    ⚠ Collision
+                                </span>
+                            }
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="mt-1">
+                            <span class="text-muted fst-italic fs-5">No key assigned</span>
+                        </div>
+                    }
+                </div>
+                <AuthorizeView Roles="FarmAdmin">
+                    <Authorized>
+                        <div class="ms-auto d-flex align-items-center gap-2">
+                            @if (_keyEditMode)
+                            {
+                                <input type="text" class="form-control form-control-sm font-monospace"
+                                       style="width:160px"
+                                       @bind="_keyEditValue"
+                                       placeholder="KEY-VALUE"
+                                       maxlength="30" />
+                                <button class="btn btn-sm btn-primary" @onclick="SaveKeyAsync">Save</button>
+                                <button class="btn btn-sm btn-outline-secondary" @onclick="() => _keyEditMode = false">Cancel</button>
+                            }
+                            else
+                            {
+                                @if (string.IsNullOrEmpty(_customer.CustomerKey))
+                                {
+                                    <button class="btn btn-sm btn-primary" @onclick="GenerateKeyAsync">
+                                        Generate Key
+                                    </button>
+                                }
+                                else
+                                {
+                                    <button class="btn btn-sm btn-outline-primary" @onclick="GenerateKeyAsync">
+                                        Regenerate
+                                    </button>
+                                }
+                                <button class="btn btn-sm btn-outline-secondary" @onclick="StartKeyEdit">
+                                    Edit Key
+                                </button>
+                            }
+                            @if (_keyError is not null)
+                            {
+                                <span class="text-danger small">@_keyError</span>
+                            }
+                        </div>
+                    </Authorized>
+                </AuthorizeView>
+            </div>
+        </div>
+    </div>
+
     <div class="row">
         <div class="col-md-6">
             <h5>Customer Info</h5>
@@ -186,11 +253,51 @@ else
 @code {
     [Parameter] public Guid Id { get; set; }
     private CustomerDetail? _customer;
+    private bool _keyEditMode;
+    private string _keyEditValue = string.Empty;
+    private string? _keyError;
     private readonly CancellationTokenSource _cts = new();
 
     protected override async Task OnInitializedAsync()
     {
         _customer = await CustomerApi.GetCustomerAsync(Id, _cts.Token);
+    }
+
+    private void StartKeyEdit()
+    {
+        _keyEditValue = _customer?.CustomerKey ?? string.Empty;
+        _keyEditMode  = true;
+        _keyError     = null;
+    }
+
+    private async Task GenerateKeyAsync()
+    {
+        _keyError = null;
+        var result = await CustomerApi.GenerateCustomerKeyAsync(Id, _cts.Token);
+        if (result is null)
+        {
+            _keyError = "Failed to generate key.";
+            return;
+        }
+        _customer = _customer! with { CustomerKey = result.CustomerKey, CustomerKeyCollision = result.HasCollision };
+    }
+
+    private async Task SaveKeyAsync()
+    {
+        _keyError = null;
+        if (string.IsNullOrWhiteSpace(_keyEditValue))
+        {
+            _keyError = "Key cannot be empty.";
+            return;
+        }
+        var result = await CustomerApi.UpdateCustomerKeyAsync(Id, _keyEditValue.Trim(), _cts.Token);
+        if (result is null)
+        {
+            _keyError = "Key already in use by another customer.";
+            return;
+        }
+        _customer     = _customer! with { CustomerKey = result.CustomerKey, CustomerKeyCollision = result.HasCollision };
+        _keyEditMode  = false;
     }
 
     public void Dispose() => _cts.Cancel();

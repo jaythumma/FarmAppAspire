@@ -55,6 +55,23 @@ public class CustomerApiClient(HttpClient httpClient)
         response.EnsureSuccessStatusCode();
         return await response.Content.ReadFromJsonAsync<AddressDto>(JsonOptions, cancellationToken);
     }
+
+    public async Task<CustomerKeyDto?> GenerateCustomerKeyAsync(Guid customerId, CancellationToken cancellationToken = default)
+    {
+        var response = await httpClient.PostAsync($"/customers/{customerId}/key/generate", null, cancellationToken);
+        if (!response.IsSuccessStatusCode) return null;
+        return await response.Content.ReadFromJsonAsync<CustomerKeyDto>(JsonOptions, cancellationToken);
+    }
+
+    public async Task<CustomerKeyDto?> UpdateCustomerKeyAsync(Guid customerId, string customerKey, CancellationToken cancellationToken = default)
+    {
+        var response = await httpClient.PutAsJsonAsync(
+            $"/customers/{customerId}/key",
+            new CustomerKeyDto(customerKey, false),
+            JsonOptions, cancellationToken);
+        if (!response.IsSuccessStatusCode) return null;
+        return await response.Content.ReadFromJsonAsync<CustomerKeyDto>(JsonOptions, cancellationToken);
+    }
 }
 
 public enum CustomerType { Wholesale, Retail }
@@ -65,7 +82,7 @@ public enum AddressType { Billing, Shipping, Both }
 
 public record PagedResult<T>(int Total, int Page, int Size, T[] Items);
 
-public record CustomerSummary(Guid Id, CustomerType Type, ChannelType ChannelType, string DisplayName, string? CompanyName, string? PrimaryEmail, string? PrimaryPhone, int OrderCount = 0, decimal TotalOrderAmount = 0m);
+public record CustomerSummary(Guid Id, CustomerType Type, ChannelType ChannelType, string DisplayName, string? CompanyName, string? PrimaryEmail, string? PrimaryPhone, int OrderCount = 0, decimal TotalOrderAmount = 0m, string? CustomerKey = null, bool CustomerKeyCollision = false);
 
 public record CustomerDetail(
     Guid Id, CustomerType Type, ChannelType ChannelType, string DisplayName,
@@ -76,8 +93,11 @@ public record CustomerDetail(
     ContactDto[] Contacts,
     AddressDto[] Addresses,
     int OrderCount = 0,
-    decimal TotalOrderAmount = 0m);
+    decimal TotalOrderAmount = 0m,
+    string? CustomerKey = null,
+    bool CustomerKeyCollision = false);
 
+public record CustomerKeyDto(string? CustomerKey, bool HasCollision);
 public record ContactDto(
     Guid Id, ContactRole Role, string FirstName, string LastName,
     string? Email, string? Phone, string? Mobile, bool IsPrimary);
