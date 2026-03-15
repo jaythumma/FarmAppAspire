@@ -6,13 +6,14 @@
 
 <PageTitle>Customers</PageTitle>
 
-<h1>Customers</h1>
-
-<AuthorizeView Roles="FarmAdmin">
-    <Authorized>
-        <a href="/customers/create" class="btn btn-primary mb-3">New Customer</a>
-    </Authorized>
-</AuthorizeView>
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h1 class="mb-0">Customers</h1>
+    <AuthorizeView Roles="FarmAdmin">
+        <Authorized>
+            <a href="/customers/create" class="btn btn-primary">New Customer</a>
+        </Authorized>
+    </AuthorizeView>
+</div>
 
 @if (_customers is null)
 {
