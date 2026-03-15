@@ -1,0 +1,179 @@
+@page "/invoices/{CustomerId:guid}/{InvoiceId:guid}"
+@rendermode InteractiveServer
+@attribute [Authorize]
+@inject InvoiceApiClient InvoiceApi
+@inject OrderApiClient OrderApi
+@inject CustomerApiClient CustomerApi
+@implements IDisposable
+
+<PageTitle>Invoice @(_invoice?.Label ?? "Detail")</PageTitle>
+
+@if (_loading)
+{
+    <p><em>Loading…</em></p>
+}
+else if (_invoice is null)
+{
+    <div class="alert alert-warning">Invoice not found.</div>
+    <a href="/invoices" class="btn btn-secondary">← Back to Invoices</a>
+}
+else
+{
+    <div class="d-flex align-items-center gap-2 mb-3">
+        <h1 class="mb-0 font-monospace">@_invoice.Label</h1>
+        <span class="badge @ChannelBadgeClass(_invoice.Channel) fs-6">@_invoice.Channel</span>
+        <a href="/invoices" class="btn btn-sm btn-outline-secondary ms-auto">← Back</a>
+    </div>
+
+    <div class="row g-4">
+        <!-- Invoice metadata -->
+        <div class="col-md-6">
+            <div class="card h-100">
+                <div class="card-header"><h5 class="mb-0">Invoice Details</h5></div>
+                <div class="card-body">
+                    <dl class="row mb-0">
+                        <dt class="col-sm-5">Label</dt>
+                        <dd class="col-sm-7 font-monospace fw-semibold">@_invoice.Label</dd>
+
+                        <dt class="col-sm-5">Channel</dt>
+                        <dd class="col-sm-7">
+                            <span class="badge @ChannelBadgeClass(_invoice.Channel)">@_invoice.Channel</span>
+                        </dd>
+
+                        <dt class="col-sm-5">Season Year</dt>
+                        <dd class="col-sm-7">@_invoice.SeasonYear</dd>
+
+                        <dt class="col-sm-5">Invoice #</dt>
+                        <dd class="col-sm-7">@_invoice.SeekNum.ToString("D2")</dd>
+
+                        <dt class="col-sm-5">Created</dt>
+                        <dd class="col-sm-7">@_invoice.CreatedAt.ToString("MMM d, yyyy h:mm tt")</dd>
+
+                        @if (_customer is not null)
+                        {
+                            <dt class="col-sm-5">Customer</dt>
+                            <dd class="col-sm-7">
+                                <a href="/customers/@CustomerId">@_customer.DisplayName</a>
+                            </dd>
+                        }
+                    </dl>
+                </div>
+            </div>
+        </div>
+
+        <!-- Linked order details -->
+        <div class="col-md-6">
+            <div class="card h-100">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">Linked Order</h5>
+                    @if (_order is not null)
+                    {
+                        <a href="/orders/@CustomerId/@_order.Id/edit"
+                           class="btn btn-sm btn-outline-secondary">View Order</a>
+                    }
+                </div>
+                <div class="card-body">
+                    @if (_order is null)
+                    {
+                        <p class="text-muted mb-0"><em>Order details not available.</em></p>
+                    }
+                    else
+                    {
+                        <dl class="row mb-0">
+                            <dt class="col-sm-5">Week Of</dt>
+                            <dd class="col-sm-7">@_order.WeekOf.ToString("MMM d, yyyy")</dd>
+
+                            <dt class="col-sm-5">Channel</dt>
+                            <dd class="col-sm-7">@_order.Channel</dd>
+
+                            <dt class="col-sm-5">Status</dt>
+                            <dd class="col-sm-7">
+                                <span class="badge @OrderLifecycleRules.StatusBadgeClass(_order.Status)">
+                                    @_order.Status
+                                </span>
+                            </dd>
+
+                            <dt class="col-sm-5">Sample</dt>
+                            <dd class="col-sm-7">@(_order.IsSample ? "Yes" : "No")</dd>
+
+                            <dt class="col-sm-5">Total Qty</dt>
+                            <dd class="col-sm-7">@_order.TotalQty</dd>
+
+                            <dt class="col-sm-5">Total Amount</dt>
+                            <dd class="col-sm-7">@_order.TotalAmount.ToString("C")</dd>
+                        </dl>
+
+                        @if (_order.Lines is { Count: > 0 })
+                        {
+                            <h6 class="mt-3">Order Lines</h6>
+                            <table class="table table-sm mb-0">
+                                <thead>
+                                    <tr>
+                                        <th>Size / Tier</th>
+                                        <th class="text-center">Qty</th>
+                                        <th class="text-end">Unit Price</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var line in _order.Lines)
+                                    {
+                                        <tr>
+                                            <td>@(line.BoxSize ?? line.FedExTierSize ?? "—")</td>
+                                            <td class="text-center">@line.Qty</td>
+                                            <td class="text-end">
+                                                @if (line.FedExFixedPrice.HasValue)
+                                                {
+                                                    @line.FedExFixedPrice.Value.ToString("C")
+                                                }
+                                                else if (line.EffectivePricePerLb.HasValue)
+                                                {
+                                                    @($"{line.EffectivePricePerLb.Value:C}/lb")
+                                                }
+                                                else
+                                                {
+                                                    <span>—</span>
+                                                }
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        }
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public Guid CustomerId { get; set; }
+    [Parameter] public Guid InvoiceId { get; set; }
+
+    private InvoiceSummary? _invoice;
+    private OrderDetail? _order;
+    private CustomerDetail? _customer;
+    private bool _loading = true;
+    private readonly CancellationTokenSource _cts = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        _invoice = await InvoiceApi.GetInvoiceAsync(CustomerId, InvoiceId, _cts.Token);
+
+        if (_invoice is not null)
+        {
+            var orderTask   = OrderApi.GetOrderAsync(CustomerId, _invoice.OrderInstanceId, _cts.Token);
+            var customerTask = CustomerApi.GetCustomerAsync(CustomerId, _cts.Token);
+            await Task.WhenAll(orderTask, customerTask);
+            _order    = orderTask.Result;
+            _customer = customerTask.Result;
+        }
+
+        _loading = false;
+    }
+
+    private static string ChannelBadgeClass(string channel) =>
+        channel == "FedEx" ? "bg-warning text-dark" : "bg-info text-dark";
+
+    public void Dispose() => _cts.Cancel();
+}
