@@ -70,5 +70,6 @@ public record FedExOrderLineRequest(FedExTierSize TierSize, int Qty);
 public record CreateFedExOrderRequest(Guid? ContactId, IReadOnlyList<FedExOrderLineRequest> Lines, DateTime? WeekOf = null, bool IsSample = false);
 public record UpdateOrderRequest(Guid? ContactId, bool IsSample);
 
-public record OrderSummary(Guid Id, Guid CustomerId, string Channel, string Status, DateTime WeekOf, bool IsSample);
-public record OrderDetail(Guid Id, Guid CustomerId, string Channel, string Status, DateTime WeekOf, bool IsSample, Guid? ContactId);
+public record OrderSummary(Guid Id, Guid CustomerId, string Channel, string Status, DateTime WeekOf, bool IsSample, int TotalQty, decimal TotalAmount);
+public record OrderLine(Guid Id, string? BoxSize, int Qty, decimal? EffectivePricePerLb, string? FedExTierSize, decimal? FedExFixedPrice, string? PackagingType);
+public record OrderDetail(Guid Id, Guid CustomerId, string Channel, string Status, DateTime WeekOf, bool IsSample, Guid? ContactId, int TotalQty, decimal TotalAmount, IReadOnlyList<OrderLine> Lines);

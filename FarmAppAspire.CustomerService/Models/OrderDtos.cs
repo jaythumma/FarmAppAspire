@@ -55,7 +55,9 @@ public record OrderInstanceDto(
     OrderChannel Channel, OrderInstanceStatus Status,
     DateTime WeekOf, DateTime? ShipDate, bool IsSample,
     IReadOnlyList<OrderInstanceLineDto> Lines,
-    DateTime CreatedAt);
+    DateTime CreatedAt,
+    int TotalQty,
+    decimal TotalAmount);
 
 public record InspectOrderRequest(DateTime InspectionDate);
 public record UpdateOrderInstanceRequest(Guid? ContactId, bool IsSample);

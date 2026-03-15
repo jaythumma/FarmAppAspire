@@ -23,14 +23,17 @@ public static class OrderInstanceEndpoints
 
             var items = await q.OrderByDescending(i => i.WeekOf)
                 .Skip((page - 1) * pageSize).Take(pageSize).ToListAsync();
-            return Results.Ok(items.Select(ToDto));
+            var boxConfigs = await db.InsulatedBoxConfigs.ToListAsync();
+            return Results.Ok(items.Select(i => ToDto(i, boxConfigs)));
         }).Produces<IEnumerable<OrderInstanceDto>>();
 
         g.MapGet("/{instanceId:guid}", async (Guid customerId, Guid instanceId, CustomerDbContext db) =>
         {
             var i = await db.OrderInstances.Include(i => i.Lines)
                 .FirstOrDefaultAsync(i => i.Id == instanceId && i.CustomerId == customerId);
-            return i is null ? Results.NotFound() : Results.Ok(ToDto(i));
+            if (i is null) return Results.NotFound();
+            var boxConfigs = await db.InsulatedBoxConfigs.ToListAsync();
+            return Results.Ok(ToDto(i, boxConfigs));
         }).Produces<OrderInstanceDto>();
 
         g.MapPost("/{instanceId:guid}/harvest", async (Guid customerId, Guid instanceId,
@@ -68,7 +71,8 @@ public static class OrderInstanceEndpoints
                 await CreateInvoiceAsync(instance, db);
 
             await db.SaveChangesAsync();
-            return Results.Ok(ToDto(instance));
+            var shipBoxConfigs = await db.InsulatedBoxConfigs.ToListAsync();
+            return Results.Ok(ToDto(instance, shipBoxConfigs));
         });
 
         g.MapPatch("/{instanceId:guid}", async (Guid customerId, Guid instanceId,
@@ -91,7 +95,9 @@ public static class OrderInstanceEndpoints
             instance.ModifiedBy = ctx.Request.Headers["X-User-Id"].FirstOrDefault();
 
             await db.SaveChangesAsync();
-            return Results.Ok(ToDto(instance));
+            await db.Entry(instance).Collection(x => x.Lines).LoadAsync();
+            var patchBoxConfigs = await db.InsulatedBoxConfigs.ToListAsync();
+            return Results.Ok(ToDto(instance, patchBoxConfigs));
         }).Produces<OrderInstanceDto>();
 
         g.MapPost("/{instanceId:guid}/cancel", async (Guid customerId, Guid instanceId,
@@ -137,7 +143,8 @@ public static class OrderInstanceEndpoints
         instance.ModifiedAt = DateTime.UtcNow;
         instance.ModifiedBy = ctx.Request.Headers["X-User-Id"].FirstOrDefault();
         await db.SaveChangesAsync();
-        return Results.Ok(ToDto(instance));
+        var boxConfigs = await db.InsulatedBoxConfigs.ToListAsync();
+        return Results.Ok(ToDto(instance, boxConfigs));
     }
 
     internal static async Task CreateInvoiceAsync(OrderInstance instance, CustomerDbContext db)
@@ -170,11 +177,15 @@ public static class OrderInstanceEndpoints
         });
     }
 
-    internal static OrderInstanceDto ToDto(OrderInstance i) => new(
-        i.Id, i.StandingOrderId, i.CustomerId, i.ContactId,
-        i.Channel, i.Status, i.WeekOf, i.ShipDate, i.IsSample,
-        i.Lines.Select(l => new OrderInstanceLineDto(
-            l.Id, l.BoxSize, l.Qty, l.EffectivePricePerLb,
-            l.FedExTierSize, l.FedExFixedPrice, l.PackagingType)).ToList(),
-        i.CreatedAt);
+    internal static OrderInstanceDto ToDto(OrderInstance i, IEnumerable<InsulatedBoxConfig> boxConfigs)
+    {
+        var (totalQty, totalAmount) = PriceResolutionService.ComputeOrderInstanceTotals(i.Lines, boxConfigs);
+        return new(
+            i.Id, i.StandingOrderId, i.CustomerId, i.ContactId,
+            i.Channel, i.Status, i.WeekOf, i.ShipDate, i.IsSample,
+            i.Lines.Select(l => new OrderInstanceLineDto(
+                l.Id, l.BoxSize, l.Qty, l.EffectivePricePerLb,
+                l.FedExTierSize, l.FedExFixedPrice, l.PackagingType)).ToList(),
+            i.CreatedAt, totalQty, totalAmount);
+    }
 }

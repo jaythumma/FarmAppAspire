@@ -18,7 +18,7 @@ public static class FedExOrderEndpoints
                 .Where(i => i.CustomerId == customerId && i.Channel == OrderChannel.FedEx)
                 .OrderByDescending(i => i.CreatedAt)
                 .ToListAsync();
-            return Results.Ok(instances.Select(OrderInstanceEndpoints.ToDto));
+            return Results.Ok(instances.Select(i => OrderInstanceEndpoints.ToDto(i, [])));
         }).Produces<IEnumerable<OrderInstanceDto>>();
 
         g.MapGet("/{instanceId:guid}", async (Guid customerId, Guid instanceId, CustomerDbContext db) =>
@@ -27,7 +27,7 @@ public static class FedExOrderEndpoints
                 .FirstOrDefaultAsync(i => i.Id == instanceId
                                        && i.CustomerId == customerId
                                        && i.Channel == OrderChannel.FedEx);
-            return i is null ? Results.NotFound() : Results.Ok(OrderInstanceEndpoints.ToDto(i));
+            return i is null ? Results.NotFound() : Results.Ok(OrderInstanceEndpoints.ToDto(i, []));
         }).Produces<OrderInstanceDto>();
 
         g.MapPost("/", async (Guid customerId, CreateFedExOrderRequest req,
@@ -80,7 +80,7 @@ public static class FedExOrderEndpoints
             db.OrderInstances.Add(instance);
             await db.SaveChangesAsync();
             return Results.Created($"/customers/{customerId}/fedex-orders/{instance.Id}",
-                OrderInstanceEndpoints.ToDto(instance));
+                OrderInstanceEndpoints.ToDto(instance, []));
         }).Produces<OrderInstanceDto>(StatusCodes.Status201Created);
 
         return app;
