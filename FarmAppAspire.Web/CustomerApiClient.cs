@@ -72,6 +72,26 @@ public class CustomerApiClient(HttpClient httpClient)
         if (!response.IsSuccessStatusCode) return null;
         return await response.Content.ReadFromJsonAsync<CustomerKeyDto>(JsonOptions, cancellationToken);
     }
+
+    public async Task<ContactDto?> CreateContactAsync(Guid customerId, CreateContactRequest request, CancellationToken cancellationToken = default)
+    {
+        var response = await httpClient.PostAsJsonAsync($"/customers/{customerId}/contacts", request, JsonOptions, cancellationToken);
+        if (!response.IsSuccessStatusCode) return null;
+        return await response.Content.ReadFromJsonAsync<ContactDto>(JsonOptions, cancellationToken);
+    }
+
+    public async Task<ContactDto?> UpdateContactAsync(Guid customerId, Guid contactId, UpdateContactRequest request, CancellationToken cancellationToken = default)
+    {
+        var response = await httpClient.PutAsJsonAsync($"/customers/{customerId}/contacts/{contactId}", request, JsonOptions, cancellationToken);
+        if (!response.IsSuccessStatusCode) return null;
+        return await response.Content.ReadFromJsonAsync<ContactDto>(JsonOptions, cancellationToken);
+    }
+
+    public async Task<bool> DeleteContactAsync(Guid customerId, Guid contactId, CancellationToken cancellationToken = default)
+    {
+        var response = await httpClient.DeleteAsync($"/customers/{customerId}/contacts/{contactId}", cancellationToken);
+        return response.StatusCode == HttpStatusCode.NoContent;
+    }
 }
 
 public enum CustomerType { Wholesale, Retail }
@@ -133,6 +153,24 @@ public record UpdateCustomerRequest(
     string? Notes,
     bool? BillingUsesShipping = null,
     ChannelType ChannelType = ChannelType.Direct);
+
+public record CreateContactRequest(
+    ContactRole Role,
+    string FirstName,
+    string LastName,
+    string? Email,
+    string? Phone,
+    string? Mobile,
+    bool IsPrimary);
+
+public record UpdateContactRequest(
+    ContactRole Role,
+    string FirstName,
+    string LastName,
+    string? Email,
+    string? Phone,
+    string? Mobile,
+    bool IsPrimary);
 
 public record CreateAddressRequest(
     string Label,

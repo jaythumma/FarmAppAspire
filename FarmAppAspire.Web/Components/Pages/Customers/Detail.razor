@@ -193,9 +193,84 @@ else
         </div>
     </div>
 
+    @* ── Contacts ─────────────────────────────────────────────────────────── *@
+    <div class="d-flex align-items-center gap-2 mb-2 mt-3">
+        <h5 class="mb-0">Contacts</h5>
+        <AuthorizeView Roles="FarmAdmin">
+            <Authorized>
+                <button class="btn btn-sm btn-outline-primary ms-auto" @onclick="StartAddContact">+ Add Contact</button>
+            </Authorized>
+        </AuthorizeView>
+    </div>
+
+    @if (_customer.Type == CustomerType.Wholesale && !_customer.Contacts.Any())
+    {
+        <div class="alert alert-warning py-2">Wholesale customers should have at least one contact.</div>
+    }
+
+    @if (_contactError is not null)
+    {
+        <div class="alert alert-danger d-flex justify-content-between align-items-center py-2">
+            <span>@_contactError</span>
+            <button type="button" class="btn-close btn-sm" @onclick="() => _contactError = null"></button>
+        </div>
+    }
+
+    @if (_showContactForm)
+    {
+        <div class="card mb-3">
+            <div class="card-body">
+                <h6 class="card-title">@(_editingContactId.HasValue ? "Edit Contact" : "New Contact")</h6>
+                <EditForm Model="_contactForm" OnValidSubmit="SaveContactAsync">
+                    <DataAnnotationsValidator />
+                    <div class="row g-2">
+                        <div class="col-md-3">
+                            <label class="form-label">First Name *</label>
+                            <InputText @bind-Value="_contactForm.FirstName" class="form-control form-control-sm" />
+                            <ValidationMessage For="() => _contactForm.FirstName" />
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Last Name *</label>
+                            <InputText @bind-Value="_contactForm.LastName" class="form-control form-control-sm" />
+                            <ValidationMessage For="() => _contactForm.LastName" />
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">Role</label>
+                            <InputSelect @bind-Value="_contactForm.Role" class="form-select form-select-sm">
+                                @foreach (var role in Enum.GetValues<ContactRole>())
+                                {
+                                    <option value="@role">@role</option>
+                                }
+                            </InputSelect>
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">Email</label>
+                            <InputText @bind-Value="_contactForm.Email" class="form-control form-control-sm" />
+                        </div>
+                        <div class="col-md-1">
+                            <label class="form-label">Phone</label>
+                            <InputText @bind-Value="_contactForm.Phone" class="form-control form-control-sm" />
+                        </div>
+                        <div class="col-md-1">
+                            <label class="form-label">Mobile</label>
+                            <InputText @bind-Value="_contactForm.Mobile" class="form-control form-control-sm" />
+                        </div>
+                    </div>
+                    <div class="form-check mt-2">
+                        <InputCheckbox @bind-Value="_contactForm.IsPrimary" class="form-check-input" id="contactIsPrimary" />
+                        <label class="form-check-label" for="contactIsPrimary">Primary contact</label>
+                    </div>
+                    <div class="mt-2 d-flex gap-2">
+                        <button type="submit" class="btn btn-sm btn-primary">Save</button>
+                        <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="() => _showContactForm = false">Cancel</button>
+                    </div>
+                </EditForm>
+            </div>
+        </div>
+    }
+
     @if (_customer.Contacts.Any())
     {
-        <h5>Contacts</h5>
         <table class="table table-sm">
             <thead>
                 <tr>
@@ -203,6 +278,9 @@ else
                     <th>Role</th>
                     <th>Email</th>
                     <th>Phone</th>
+                    <AuthorizeView Roles="FarmAdmin">
+                        <Authorized><th></th></Authorized>
+                    </AuthorizeView>
                 </tr>
             </thead>
             <tbody>
@@ -213,10 +291,30 @@ else
                         <td>@contact.Role</td>
                         <td>@contact.Email</td>
                         <td>@(contact.Phone ?? contact.Mobile)</td>
+                        <AuthorizeView Roles="FarmAdmin">
+                            <Authorized>
+                                <td class="text-end text-nowrap">
+                                    @if (_pendingDeleteId == contact.Id)
+                                    {
+                                        <button class="btn btn-sm btn-danger me-1" @onclick="() => ConfirmDeleteContactAsync(contact.Id)">Confirm?</button>
+                                        <button class="btn btn-sm btn-outline-secondary" @onclick="() => _pendingDeleteId = null">Cancel</button>
+                                    }
+                                    else
+                                    {
+                                        <button class="btn btn-sm btn-outline-secondary me-1" @onclick="() => StartEditContact(contact)">Edit</button>
+                                        <button class="btn btn-sm btn-outline-danger" @onclick="() => _pendingDeleteId = contact.Id">Delete</button>
+                                    }
+                                </td>
+                            </Authorized>
+                        </AuthorizeView>
                     </tr>
                 }
             </tbody>
         </table>
+    }
+    else if (!_showContactForm)
+    {
+        <p class="text-muted">No contacts on file.</p>
     }
 
     @if (_customer.Addresses.Any())
@@ -258,11 +356,34 @@ else
     private string? _keyError;
     private readonly CancellationTokenSource _cts = new();
 
+    // ── Contact state ────────────────────────────────────────────────────────
+    private ContactForm _contactForm = new();
+    private Guid? _editingContactId;
+    private bool _showContactForm;
+    private Guid? _pendingDeleteId;
+    private string? _contactError;
+
+    private sealed class ContactForm
+    {
+        [System.ComponentModel.DataAnnotations.Required(ErrorMessage = "First name is required.")]
+        public string FirstName { get; set; } = string.Empty;
+
+        [System.ComponentModel.DataAnnotations.Required(ErrorMessage = "Last name is required.")]
+        public string LastName { get; set; } = string.Empty;
+
+        public ContactRole Role { get; set; } = ContactRole.Primary;
+        public string? Email { get; set; }
+        public string? Phone { get; set; }
+        public string? Mobile { get; set; }
+        public bool IsPrimary { get; set; }
+    }
+
     protected override async Task OnInitializedAsync()
     {
         _customer = await CustomerApi.GetCustomerAsync(Id, _cts.Token);
     }
 
+    // ── Customer Key ─────────────────────────────────────────────────────────
     private void StartKeyEdit()
     {
         _keyEditValue = _customer?.CustomerKey ?? string.Empty;
@@ -298,6 +419,88 @@ else
         }
         _customer     = _customer! with { CustomerKey = result.CustomerKey, CustomerKeyCollision = result.HasCollision };
         _keyEditMode  = false;
+    }
+
+    // ── Contacts ─────────────────────────────────────────────────────────────
+    private void StartAddContact()
+    {
+        _contactForm       = new ContactForm();
+        _editingContactId  = null;
+        _showContactForm   = true;
+        _contactError      = null;
+        _pendingDeleteId   = null;
+    }
+
+    private void StartEditContact(ContactDto contact)
+    {
+        _contactForm = new ContactForm
+        {
+            FirstName = contact.FirstName,
+            LastName  = contact.LastName,
+            Role      = contact.Role,
+            Email     = contact.Email,
+            Phone     = contact.Phone,
+            Mobile    = contact.Mobile,
+            IsPrimary = contact.IsPrimary,
+        };
+        _editingContactId = contact.Id;
+        _showContactForm  = true;
+        _contactError     = null;
+        _pendingDeleteId  = null;
+    }
+
+    private async Task SaveContactAsync()
+    {
+        _contactError = null;
+        ContactDto? result;
+
+        if (_editingContactId.HasValue)
+        {
+            var req = new UpdateContactRequest(
+                _contactForm.Role, _contactForm.FirstName, _contactForm.LastName,
+                _contactForm.Email, _contactForm.Phone, _contactForm.Mobile, _contactForm.IsPrimary);
+            result = await CustomerApi.UpdateContactAsync(Id, _editingContactId.Value, req, _cts.Token);
+            if (result is null)
+            {
+                _contactError = "Failed to update contact.";
+                return;
+            }
+            var updated = _customer!.Contacts
+                .Select(c => c.Id == _editingContactId.Value ? result : c)
+                .ToArray();
+            _customer = _customer with { Contacts = updated };
+        }
+        else
+        {
+            var req = new CreateContactRequest(
+                _contactForm.Role, _contactForm.FirstName, _contactForm.LastName,
+                _contactForm.Email, _contactForm.Phone, _contactForm.Mobile, _contactForm.IsPrimary);
+            result = await CustomerApi.CreateContactAsync(Id, req, _cts.Token);
+            if (result is null)
+            {
+                _contactError = "Failed to create contact.";
+                return;
+            }
+            _customer = _customer! with { Contacts = [.. _customer.Contacts, result] };
+        }
+
+        _showContactForm  = false;
+        _editingContactId = null;
+    }
+
+    private async Task ConfirmDeleteContactAsync(Guid contactId)
+    {
+        _contactError = null;
+        var ok = await CustomerApi.DeleteContactAsync(Id, contactId, _cts.Token);
+        if (!ok)
+        {
+            _contactError = "Failed to delete contact.";
+        }
+        else
+        {
+            _customer = _customer! with { Contacts = _customer.Contacts.Where(c => c.Id != contactId).ToArray() };
+        }
+        _pendingDeleteId = null;
     }
 
     public void Dispose() => _cts.Cancel();
