@@ -392,6 +392,49 @@ public class CustomerEndpointTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task PostCustomer_WithChannelTypeAmazon_AutoGeneratesCustomerKey()
+    {
+        var name = $"AmazonKey-{Guid.NewGuid():N}";
+        var req = new CreateCustomerRequest(
+            CustomerType.Retail, name,
+            CompanyName: null, TaxId: null, PaymentTerms: null,
+            PrimaryEmail: null, PrimaryPhone: null, Notes: null,
+            ShippingAddress: ValidShippingAddress(),
+            ChannelType: ChannelType.Amazon);
+
+        var response = await _client!.PostAsJsonAsync("/customers", req, JsonOptions);
+        response.EnsureSuccessStatusCode();
+        var created = await response.Content.ReadFromJsonAsync<CustomerDetailDto>(JsonOptions);
+
+        Assert.NotNull(created);
+        Assert.NotNull(created.CustomerKey);
+        Assert.StartsWith("AMZ-", created.CustomerKey);
+    }
+
+    [Fact]
+    public async Task PutCustomer_UpdateChannelTypeToAmazon_AutoGeneratesCustomerKey()
+    {
+        var name = $"AmazonUpdate-{Guid.NewGuid():N}";
+        var created = await CreateRetailCustomerAsync(name);
+        Assert.Equal(ChannelType.Direct, created.ChannelType);
+
+        var updateReq = new UpdateCustomerRequest(
+            DisplayName: name,
+            CompanyName: null, TaxId: null, PaymentTerms: null,
+            PrimaryEmail: null, PrimaryPhone: null, Notes: null,
+            ChannelType: ChannelType.Amazon);
+
+        var putResp = await _client!.PutAsJsonAsync($"/customers/{created.Id}", updateReq, JsonOptions);
+        putResp.EnsureSuccessStatusCode();
+        var updated = await putResp.Content.ReadFromJsonAsync<CustomerDetailDto>(JsonOptions);
+
+        Assert.NotNull(updated);
+        Assert.Equal(ChannelType.Amazon, updated.ChannelType);
+        Assert.NotNull(updated.CustomerKey);
+        Assert.StartsWith("AMZ-", updated.CustomerKey);
+    }
+
+    [Fact]
     public async Task PutCustomer_UpdateChannelType_Persists()
     {
         var name = $"ChannelUpdate-{Guid.NewGuid():N}";

@@ -173,6 +173,40 @@ customers.MapPost("", async (CreateCustomerRequest req, CustomerDbContext db, Ht
         });
     }
 
+    // Auto-generate CustomerKey for Amazon channel customers
+    if (req.ChannelType == ChannelType.Amazon)
+    {
+        var svc = new CustomerKeyService();
+        var keyTarget = new Customer
+        {
+            Id = customer.Id,
+            DisplayName = customer.DisplayName,
+            ChannelType = ChannelType.Amazon,
+            Addresses =
+            [
+                new CustomerAddress
+                {
+                    Type = AddressType.Shipping,
+                    IsDefault = true,
+                    City = req.ShippingAddress.City,
+                    State = req.ShippingAddress.State,
+                    Line1 = req.ShippingAddress.Line1,
+                    PostalCode = req.ShippingAddress.PostalCode,
+                    Country = req.ShippingAddress.Country,
+                    CreatedAt = now,
+                }
+            ]
+        };
+        var proposed = svc.Generate(keyTarget);
+        var existingKeys = await db.Customers
+            .Where(c => c.CustomerKey != null)
+            .Select(c => new { c.CustomerKey, c.Id })
+            .ToListAsync();
+        customer.CustomerKey = proposed;
+        customer.CustomerKeyCollision = CustomerKeyService.CheckCollision(
+            proposed, customer.Id, existingKeys.Select(e => (e.CustomerKey!, e.Id)));
+    }
+
     await db.SaveChangesAsync();
 
     var created = await db.Customers
@@ -201,6 +235,22 @@ customers.MapPut("{id:guid}", async (Guid id, UpdateCustomerRequest req, Custome
         c.BillingUsesShipping = req.BillingUsesShipping.Value;
     c.ModifiedAt = DateTime.UtcNow;
     c.ModifiedBy = ctx.Request.Headers["X-User-Id"].ToString();
+
+    // Auto-regenerate CustomerKey for Amazon channel customers
+    if (req.ChannelType == ChannelType.Amazon)
+    {
+        await db.CustomerAddresses.Where(a => a.CustomerId == id).LoadAsync();
+        var svc = new CustomerKeyService();
+        var proposed = svc.Generate(c);
+        var existingKeys = await db.Customers
+            .Where(x => x.CustomerKey != null && x.Id != id)
+            .Select(x => new { x.CustomerKey, x.Id })
+            .ToListAsync();
+        c.CustomerKey = proposed;
+        c.CustomerKeyCollision = CustomerKeyService.CheckCollision(
+            proposed, id, existingKeys.Select(e => (e.CustomerKey!, e.Id)));
+    }
+
     await db.SaveChangesAsync();
     var full = await db.Customers.Include(x => x.Contacts).Include(x => x.Addresses).FirstAsync(x => x.Id == id);
     var putBoxConfigs = await db.InsulatedBoxConfigs.ToListAsync();
