@@ -67,6 +67,12 @@ else
                     <dt class="col-sm-4">Notes</dt>
                     <dd class="col-sm-8">@_customer.Notes</dd>
                 }
+
+                <dt class="col-sm-4">Orders</dt>
+                <dd class="col-sm-8">@_customer.OrderCount</dd>
+
+                <dt class="col-sm-4">Order Total</dt>
+                <dd class="col-sm-8">@_customer.TotalOrderAmount.ToString("C")</dd>
             </dl>
         </div>
 

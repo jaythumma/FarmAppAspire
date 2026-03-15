@@ -1,6 +1,7 @@
 using FarmAppAspire.CustomerService.Data;
 using FarmAppAspire.CustomerService.Endpoints;
 using FarmAppAspire.CustomerService.Models;
+using FarmAppAspire.CustomerService.Services;
 using Microsoft.EntityFrameworkCore;
 using Scalar.AspNetCore;
 using System.Text.Json.Serialization;
@@ -50,11 +51,32 @@ var customers = app.MapGroup("/customers").WithTags("Customers");
 customers.MapGet("", async (CustomerDbContext db, int page = 1, int size = 25) =>
 {
     var total = await db.Customers.CountAsync();
-    var items = await db.Customers
+    var customerPage = await db.Customers
         .OrderBy(c => c.DisplayName)
         .Skip((page - 1) * size).Take(size)
-        .Select(c => c.ToSummaryDto())
         .ToListAsync();
+
+    var customerIds = customerPage.Select(c => c.Id).ToList();
+    var boxConfigs  = await db.InsulatedBoxConfigs.ToListAsync();
+
+    var orders = await db.OrderInstances
+        .Include(o => o.Lines)
+        .Where(o => customerIds.Contains(o.CustomerId) && o.Status != OrderInstanceStatus.Cancelled)
+        .ToListAsync();
+
+    var ordersByCustomer = orders
+        .GroupBy(o => o.CustomerId)
+        .ToDictionary(g => g.Key, g => g.ToList());
+
+    var items = customerPage.Select(c =>
+    {
+        var customerOrders = ordersByCustomer.GetValueOrDefault(c.Id, []);
+        var orderCount    = customerOrders.Count;
+        var totalAmount   = customerOrders.Sum(o =>
+            PriceResolutionService.ComputeOrderInstanceTotals(o.Lines, boxConfigs).TotalAmount);
+        return c.ToSummaryDto(orderCount, totalAmount);
+    }).ToList();
+
     return Results.Ok(new { total, page, size, items });
 });
 
@@ -65,7 +87,19 @@ customers.MapGet("{id:guid}", async (Guid id, CustomerDbContext db) =>
         .Include(x => x.Contacts)
         .Include(x => x.Addresses)
         .FirstOrDefaultAsync(x => x.Id == id);
-    return c is null ? Results.NotFound() : Results.Ok(c.ToDetailDto());
+    if (c is null) return Results.NotFound();
+
+    var boxConfigs = await db.InsulatedBoxConfigs.ToListAsync();
+    var orders     = await db.OrderInstances
+        .Include(o => o.Lines)
+        .Where(o => o.CustomerId == id && o.Status != OrderInstanceStatus.Cancelled)
+        .ToListAsync();
+
+    var orderCount  = orders.Count;
+    var totalAmount = orders.Sum(o =>
+        PriceResolutionService.ComputeOrderInstanceTotals(o.Lines, boxConfigs).TotalAmount);
+
+    return Results.Ok(c.ToDetailDto(orderCount, totalAmount));
 });
 
 // POST /customers
@@ -145,7 +179,7 @@ customers.MapPost("", async (CreateCustomerRequest req, CustomerDbContext db, Ht
         .Include(x => x.Contacts)
         .Include(x => x.Addresses)
         .FirstAsync(x => x.Id == customer.Id);
-    return Results.Created($"/customers/{customer.Id}", created.ToDetailDto());
+    return Results.Created($"/customers/{customer.Id}", created.ToDetailDto(0, 0m));
 }).AddEndpointFilterFactory(UserIdFilter);
 
 // PUT /customers/{id}
@@ -169,7 +203,15 @@ customers.MapPut("{id:guid}", async (Guid id, UpdateCustomerRequest req, Custome
     c.ModifiedBy = ctx.Request.Headers["X-User-Id"].ToString();
     await db.SaveChangesAsync();
     var full = await db.Customers.Include(x => x.Contacts).Include(x => x.Addresses).FirstAsync(x => x.Id == id);
-    return Results.Ok(full.ToDetailDto());
+    var putBoxConfigs = await db.InsulatedBoxConfigs.ToListAsync();
+    var putOrders     = await db.OrderInstances
+        .Include(o => o.Lines)
+        .Where(o => o.CustomerId == id && o.Status != OrderInstanceStatus.Cancelled)
+        .ToListAsync();
+    var putOrderCount  = putOrders.Count;
+    var putTotalAmount = putOrders.Sum(o =>
+        PriceResolutionService.ComputeOrderInstanceTotals(o.Lines, putBoxConfigs).TotalAmount);
+    return Results.Ok(full.ToDetailDto(putOrderCount, putTotalAmount));
 }).AddEndpointFilterFactory(UserIdFilter);
 
 // DELETE /customers/{id}
