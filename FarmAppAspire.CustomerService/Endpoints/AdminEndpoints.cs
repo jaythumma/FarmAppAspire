@@ -120,38 +120,45 @@ public static class AdminEndpoints
         {
             var week = SeasonYearService.MondayOf(weekOf ?? DateTime.UtcNow);
 
-            var instances = await db.OrderInstances
-                .Include(i => i.Lines)
-                .Where(i => i.WeekOf.Date == week.Date)
-                .OrderBy(i => i.CustomerId)
-                .ToListAsync();
-
-            var boxConfigs  = await db.InsulatedBoxConfigs.ToListAsync();
-            var customerIds = instances.Select(i => i.CustomerId).Distinct().ToList();
-            var customers   = await db.Customers
-                .Where(c => customerIds.Contains(c.Id))
-                .Select(c => new { c.Id, c.DisplayName, c.CustomerKey })
-                .ToListAsync();
-            var customerMap = customers.ToDictionary(c => c.Id);
-
-            var result = instances.Select(i =>
+            try
             {
-                var cust  = customerMap.GetValueOrDefault(i.CustomerId);
-                var (qty, amount) = PriceResolutionService.ComputeOrderInstanceTotals(i.Lines, boxConfigs);
-                return new WeekInstanceSummary(
-                    i.Id,
-                    i.CustomerId,
-                    cust?.DisplayName ?? "Unknown",
-                    cust?.CustomerKey,
-                    i.Channel.ToString(),
-                    i.Status.ToString(),
-                    i.WeekOf,
-                    i.IsSample,
-                    qty,
-                    amount);
-            }).ToList();
+                var instances = await db.OrderInstances
+                    .Include(i => i.Lines)
+                    .Where(i => i.WeekOf.Date == week.Date)
+                    .OrderBy(i => i.CustomerId)
+                    .ToListAsync();
 
-            return Results.Ok(result);
+                var boxConfigs  = await db.InsulatedBoxConfigs.ToListAsync();
+                var customerIds = instances.Select(i => i.CustomerId).Distinct().ToList();
+                var customers   = await db.Customers
+                    .Where(c => customerIds.Contains(c.Id))
+                    .Select(c => new { c.Id, c.DisplayName, c.CustomerKey })
+                    .ToListAsync();
+                var customerMap = customers.ToDictionary(c => c.Id);
+
+                var result = instances.Select(i =>
+                {
+                    var cust  = customerMap.GetValueOrDefault(i.CustomerId);
+                    var (qty, amount) = PriceResolutionService.ComputeOrderInstanceTotals(i.Lines, boxConfigs);
+                    return new WeekInstanceSummary(
+                        i.Id,
+                        i.CustomerId,
+                        cust?.DisplayName ?? "Unknown",
+                        cust?.CustomerKey,
+                        i.Channel.ToString(),
+                        i.Status.ToString(),
+                        i.WeekOf,
+                        i.IsSample,
+                        qty,
+                        amount);
+                }).ToList();
+
+                return Results.Ok(result);
+            }
+            catch (Exception ex)
+            {
+                return Results.Problem(ex.Message, statusCode: StatusCodes.Status500InternalServerError);
+            }
         }).Produces<IEnumerable<WeekInstanceSummary>>();
 
 
