@@ -5,7 +5,8 @@ namespace FarmAppAspire.CustomerService.Models;
 // ── Summary (list view) ──────────────────────────────────────────────────────
 public record CustomerSummaryDto(
     Guid Id, CustomerType Type, ChannelType ChannelType, string DisplayName,
-    string? CompanyName, string? PrimaryEmail, string? PrimaryPhone);
+    string? CompanyName, string? PrimaryEmail, string? PrimaryPhone,
+    int OrderCount, decimal TotalOrderAmount);
 
 // ── Detail (single customer with children) ───────────────────────────────────
 public record CustomerDetailDto(
@@ -17,7 +18,9 @@ public record CustomerDetailDto(
     string? CustomerKey,
     bool CustomerKeyCollision,
     IEnumerable<ContactDto> Contacts,
-    IEnumerable<AddressDto> Addresses);
+    IEnumerable<AddressDto> Addresses,
+    int OrderCount,
+    decimal TotalOrderAmount);
 
 public record ContactDto(
     Guid Id, ContactRole Role, string FirstName, string LastName,
@@ -92,7 +95,7 @@ public record UpdateAddressRequest(
 // ── Mapping helpers ───────────────────────────────────────────────────────────
 public static class CustomerMappings
 {
-    public static CustomerDetailDto ToDetailDto(this Customer c) => new(
+    public static CustomerDetailDto ToDetailDto(this Customer c, int orderCount = 0, decimal totalOrderAmount = 0m) => new(
         c.Id, c.Type, c.ChannelType, c.DisplayName, c.CompanyName, c.TaxId, c.PaymentTerms,
         c.PrimaryEmail, c.PrimaryPhone, c.Notes,
         c.CreatedAt, c.CreatedBy, c.ModifiedAt, c.ModifiedBy,
@@ -100,10 +103,12 @@ public static class CustomerMappings
         c.CustomerKey,
         c.CustomerKeyCollision,
         c.Contacts.Select(x => x.ToDto()).OrderByDescending(x => x.IsPrimary),
-        c.Addresses.Select(x => x.ToDto()).OrderByDescending(x => x.IsDefault));
+        c.Addresses.Select(x => x.ToDto()).OrderByDescending(x => x.IsDefault),
+        orderCount,
+        totalOrderAmount);
 
-    public static CustomerSummaryDto ToSummaryDto(this Customer c) => new(
-        c.Id, c.Type, c.ChannelType, c.DisplayName, c.CompanyName, c.PrimaryEmail, c.PrimaryPhone);
+    public static CustomerSummaryDto ToSummaryDto(this Customer c, int orderCount = 0, decimal totalOrderAmount = 0m) => new(
+        c.Id, c.Type, c.ChannelType, c.DisplayName, c.CompanyName, c.PrimaryEmail, c.PrimaryPhone, orderCount, totalOrderAmount);
 
     public static ContactDto ToDto(this CustomerContact c) => new(
         c.Id, c.Role, c.FirstName, c.LastName, c.Email, c.Phone, c.Mobile, c.IsPrimary);

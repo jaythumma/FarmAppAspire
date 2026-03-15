@@ -221,4 +221,50 @@ public class CustomerMappingTests
         Assert.Equal(address.Country, dto.Country);
         Assert.Equal(address.IsDefault, dto.IsDefault);
     }
+
+    // ── Order aggregate fields ────────────────────────────────────────────────
+
+    [Fact]
+    public void ToSummaryDto_DefaultOrderAggregates_AreZero()
+    {
+        var customer = BuildCustomer();
+
+        var dto = customer.ToSummaryDto();
+
+        Assert.Equal(0,   dto.OrderCount);
+        Assert.Equal(0m,  dto.TotalOrderAmount);
+    }
+
+    [Fact]
+    public void ToSummaryDto_ForwardsOrderCountAndTotal()
+    {
+        var customer = BuildCustomer();
+
+        var dto = customer.ToSummaryDto(orderCount: 5, totalOrderAmount: 325.00m);
+
+        Assert.Equal(5,       dto.OrderCount);
+        Assert.Equal(325.00m, dto.TotalOrderAmount);
+    }
+
+    [Fact]
+    public void ToDetailDto_DefaultOrderAggregates_AreZero()
+    {
+        var customer = BuildCustomer();
+
+        var dto = customer.ToDetailDto();
+
+        Assert.Equal(0,  dto.OrderCount);
+        Assert.Equal(0m, dto.TotalOrderAmount);
+    }
+
+    [Fact]
+    public void ToDetailDto_ForwardsOrderCountAndTotal()
+    {
+        var customer = BuildCustomer();
+
+        var dto = customer.ToDetailDto(orderCount: 12, totalOrderAmount: 1560.00m);
+
+        Assert.Equal(12,       dto.OrderCount);
+        Assert.Equal(1560.00m, dto.TotalOrderAmount);
+    }
 }

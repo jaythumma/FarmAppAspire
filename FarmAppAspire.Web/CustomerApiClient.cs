@@ -65,7 +65,7 @@ public enum AddressType { Billing, Shipping, Both }
 
 public record PagedResult<T>(int Total, int Page, int Size, T[] Items);
 
-public record CustomerSummary(Guid Id, CustomerType Type, ChannelType ChannelType, string DisplayName, string? CompanyName, string? PrimaryEmail, string? PrimaryPhone);
+public record CustomerSummary(Guid Id, CustomerType Type, ChannelType ChannelType, string DisplayName, string? CompanyName, string? PrimaryEmail, string? PrimaryPhone, int OrderCount = 0, decimal TotalOrderAmount = 0m);
 
 public record CustomerDetail(
     Guid Id, CustomerType Type, ChannelType ChannelType, string DisplayName,
@@ -74,7 +74,9 @@ public record CustomerDetail(
     DateTime CreatedAt, string CreatedBy, DateTime? ModifiedAt, string? ModifiedBy,
     bool BillingUsesShipping,
     ContactDto[] Contacts,
-    AddressDto[] Addresses);
+    AddressDto[] Addresses,
+    int OrderCount = 0,
+    decimal TotalOrderAmount = 0m);
 
 public record ContactDto(
     Guid Id, ContactRole Role, string FirstName, string LastName,

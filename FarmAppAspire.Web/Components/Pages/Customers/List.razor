@@ -27,14 +27,16 @@ else
     <table class="table table-hover">
         <thead>
             <tr>
-                <th>Name</th>
-                <th>Type</th>
-                <th>Channel</th>
-                <th>Company</th>
-                <th>Email</th>
-                <th>Phone</th>
-                <th></th>
-            </tr>
+                    <th>Name</th>
+                    <th>Type</th>
+                    <th>Channel</th>
+                    <th>Company</th>
+                    <th>Email</th>
+                    <th>Phone</th>
+                    <th class="text-center">Orders</th>
+                    <th class="text-end">Total</th>
+                    <th></th>
+                </tr>
         </thead>
         <tbody>
             @foreach (var c in _customers)
@@ -46,6 +48,8 @@ else
                     <td>@c.CompanyName</td>
                     <td>@c.PrimaryEmail</td>
                     <td>@c.PrimaryPhone</td>
+                    <td class="text-center">@c.OrderCount</td>
+                    <td class="text-end">@c.TotalOrderAmount.ToString("C")</td>
                     <td>
                         <AuthorizeView Roles="FarmAdmin">
                             <Authorized>
