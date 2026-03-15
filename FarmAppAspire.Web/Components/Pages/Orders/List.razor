@@ -94,8 +94,23 @@ else if (_orders is not null)
                             }
                             @if (OrderLifecycleRules.CanInspect(o.Status))
                             {
-                                <button class="btn btn-sm btn-outline-primary me-1"
-                                        @onclick="() => InspectAsync(o)">Inspect</button>
+                                @if (_inspectingOrderId == o.Id)
+                                {
+                                    <span class="d-inline-flex align-items-center gap-1 me-1">
+                                        <InputDate @bind-Value="_inspectDate"
+                                                   class="form-control form-control-sm"
+                                                   style="width:140px" />
+                                        <button class="btn btn-sm btn-primary"
+                                                @onclick="() => ConfirmInspectAsync(o)">✓</button>
+                                        <button class="btn btn-sm btn-outline-secondary"
+                                                @onclick="CancelInspect">✕</button>
+                                    </span>
+                                }
+                                else
+                                {
+                                    <button class="btn btn-sm btn-outline-primary me-1"
+                                            @onclick="() => StartInspect(o)">Inspect</button>
+                                }
                             }
                             @if (OrderLifecycleRules.CanShip(o.Status))
                             {
@@ -122,6 +137,8 @@ else if (_orders is not null)
     private string _statusFilter = "";
     private string? _errorMessage;
     private bool _loading;
+    private Guid? _inspectingOrderId;
+    private DateTime _inspectDate = DateTime.Today;
     private readonly CancellationTokenSource _cts = new();
 
     protected override async Task OnInitializedAsync()
@@ -158,12 +175,31 @@ else if (_orders is not null)
         else _errorMessage = "Failed to mark as Harvested.";
     }
 
-    private async Task InspectAsync(OrderSummary order)
+    private void StartInspect(OrderSummary order)
+    {
+        _inspectingOrderId = order.Id;
+        _inspectDate       = DateTime.Today;
+        _errorMessage      = null;
+    }
+
+    private void CancelInspect()
+    {
+        _inspectingOrderId = null;
+    }
+
+    private async Task ConfirmInspectAsync(OrderSummary order)
     {
         if (!Guid.TryParse(_selectedCustomerId, out var customerId)) return;
-        var result = await OrderApi.InspectOrderAsync(customerId, order.Id, DateTime.UtcNow, _cts.Token);
-        if (result is not null) await LoadOrdersAsync();
-        else _errorMessage = "Inspect failed — inspection must occur on a Friday or Monday.";
+        var result = await OrderApi.InspectOrderAsync(customerId, order.Id, _inspectDate, _cts.Token);
+        if (result is not null)
+        {
+            _inspectingOrderId = null;
+            await LoadOrdersAsync();
+        }
+        else
+        {
+            _errorMessage = "Inspect failed — USDA inspection only occurs on Fridays and Mondays.";
+        }
     }
 
     private async Task ShipAsync(OrderSummary order)

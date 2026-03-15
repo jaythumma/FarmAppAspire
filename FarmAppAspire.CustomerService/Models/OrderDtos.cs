@@ -76,3 +76,32 @@ public record InvoiceDto(
 public record GenerateInstancesRequest(DateTime ForWeek);
 public record CustomerKeyDto(string? CustomerKey, bool HasCollision);
 public record SeasonRestartRequest(int TargetSeasonYear);
+
+public record GeneratedInstanceSummary(
+    Guid InstanceId,
+    Guid CustomerId,
+    string CustomerDisplayName,
+    string? CustomerKey,
+    string Channel,
+    DateTime WeekOf,
+    bool IsSample,
+    int TotalQty,
+    decimal TotalAmount);
+
+public record GenerateInstancesResponse(
+    int GeneratedCount,
+    int SkippedCount,
+    DateTime WeekOf,
+    IReadOnlyList<GeneratedInstanceSummary> Instances);
+
+public record WeekInstanceSummary(
+    Guid InstanceId,
+    Guid CustomerId,
+    string CustomerDisplayName,
+    string? CustomerKey,
+    string Channel,
+    string Status,
+    DateTime WeekOf,
+    bool IsSample,
+    int TotalQty,
+    decimal TotalAmount);

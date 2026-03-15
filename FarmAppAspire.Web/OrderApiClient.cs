@@ -173,6 +173,27 @@ public class OrderApiClient(HttpClient httpClient)
         if (!response.IsSuccessStatusCode) return null;
         return await response.Content.ReadFromJsonAsync<OrderDetail>(JsonOptions, cancellationToken);
     }
+
+    // ── Admin: instance generation ────────────────────────────────────────────
+
+    public async Task<GenerateInstancesResponse?> GenerateInstancesAsync(
+        DateTime forWeek, CancellationToken cancellationToken = default)
+    {
+        var response = await httpClient.PostAsJsonAsync(
+            "/admin/generate-instances",
+            new GenerateInstancesRequest(forWeek),
+            JsonOptions, cancellationToken);
+        if (!response.IsSuccessStatusCode) return null;
+        return await response.Content.ReadFromJsonAsync<GenerateInstancesResponse>(JsonOptions, cancellationToken);
+    }
+
+    public async Task<WeekInstanceSummary[]> BrowseWeekInstancesAsync(
+        DateTime weekOf, CancellationToken cancellationToken = default)
+    {
+        var result = await httpClient.GetFromJsonAsync<IEnumerable<WeekInstanceSummary>>(
+            $"/admin/instances?weekOf={weekOf:yyyy-MM-dd}", JsonOptions, cancellationToken);
+        return result?.ToArray() ?? [];
+    }
 }
 
 public enum FedExTierSize { OneOz, TwoOz, FourOz, EightOz, OneLb, TwoLb, ThreeLb, FiveLb }
@@ -206,3 +227,9 @@ public record StandingOrderDetail(
 public record OrderSummary(Guid Id, Guid? StandingOrderId, Guid CustomerId, string Channel, string Status, DateTime WeekOf, bool IsSample, int TotalQty, decimal TotalAmount);
 public record OrderLine(Guid Id, string? BoxSize, int Qty, decimal? EffectivePricePerLb, string? FedExTierSize, decimal? FedExFixedPrice, string? PackagingType);
 public record OrderDetail(Guid Id, Guid? StandingOrderId, Guid CustomerId, string Channel, string Status, DateTime WeekOf, bool IsSample, Guid? ContactId, int TotalQty, decimal TotalAmount, IReadOnlyList<OrderLine> Lines);
+
+// ── Admin DTOs ────────────────────────────────────────────────────────────────
+public record GenerateInstancesRequest(DateTime ForWeek);
+public record GeneratedInstanceSummary(Guid InstanceId, Guid CustomerId, string CustomerDisplayName, string? CustomerKey, string Channel, DateTime WeekOf, bool IsSample, int TotalQty, decimal TotalAmount);
+public record GenerateInstancesResponse(int GeneratedCount, int SkippedCount, DateTime WeekOf, IReadOnlyList<GeneratedInstanceSummary> Instances);
+public record WeekInstanceSummary(Guid InstanceId, Guid CustomerId, string CustomerDisplayName, string? CustomerKey, string Channel, string Status, DateTime WeekOf, bool IsSample, int TotalQty, decimal TotalAmount);

@@ -6,7 +6,8 @@ namespace FarmAppAspire.CustomerService.Models;
 public record CustomerSummaryDto(
     Guid Id, CustomerType Type, ChannelType ChannelType, string DisplayName,
     string? CompanyName, string? PrimaryEmail, string? PrimaryPhone,
-    int OrderCount, decimal TotalOrderAmount);
+    int OrderCount, decimal TotalOrderAmount,
+    string? CustomerKey, bool CustomerKeyCollision);
 
 // ── Detail (single customer with children) ───────────────────────────────────
 public record CustomerDetailDto(
@@ -108,7 +109,8 @@ public static class CustomerMappings
         totalOrderAmount);
 
     public static CustomerSummaryDto ToSummaryDto(this Customer c, int orderCount = 0, decimal totalOrderAmount = 0m) => new(
-        c.Id, c.Type, c.ChannelType, c.DisplayName, c.CompanyName, c.PrimaryEmail, c.PrimaryPhone, orderCount, totalOrderAmount);
+        c.Id, c.Type, c.ChannelType, c.DisplayName, c.CompanyName, c.PrimaryEmail, c.PrimaryPhone,
+        orderCount, totalOrderAmount, c.CustomerKey, c.CustomerKeyCollision);
 
     public static ContactDto ToDto(this CustomerContact c) => new(
         c.Id, c.Role, c.FirstName, c.LastName, c.Email, c.Phone, c.Mobile, c.IsPrimary);

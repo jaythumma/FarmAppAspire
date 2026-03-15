@@ -8,6 +8,14 @@
 - Use modern C# features appropriately
 - Any code you commit MUST compile, and new and existing tests related to the change MUST pass.
 
+# Implement UI web pages to handle features being implemented
+
+- create or update tests
+- ensure all tests pass using test driven red/green development
+- ensure 90% code coverage
+- Follow TDD best practices: write a failing test first, then implement the minimum code to pass the test, then refactor while keeping tests green.
+
+
 ## Architecture Overview
 
 This is a **.NET 10 Aspire** solution with five projects:

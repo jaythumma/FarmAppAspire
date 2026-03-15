@@ -26,52 +26,65 @@ public static class AdminEndpoints
                          && s.SeasonYear <= seasonYear)
                 .ToListAsync();
 
-            var created = 0;
+            var boxConfigs      = await db.InsulatedBoxConfigs.ToListAsync();
+            var customerIds     = activeOrders.Select(s => s.CustomerId).Distinct().ToList();
+            var customers       = await db.Customers
+                .Where(c => customerIds.Contains(c.Id))
+                .Select(c => new { c.Id, c.DisplayName, c.CustomerKey })
+                .ToListAsync();
+            var customerMap     = customers.ToDictionary(c => c.Id);
+
+            var created  = 0;
+            var skipped  = 0;
+            var createdInstances = new List<(OrderInstance Instance, OrderFrequency Frequency)>();
+
             foreach (var so in activeOrders)
             {
                 // Idempotency: skip if instance already exists
                 if (await db.OrderInstances.AnyAsync(i =>
                         i.StandingOrderId == so.Id && i.WeekOf.Date == weekOf.Date))
+                {
+                    skipped++;
                     continue;
+                }
 
                 var skippedDates = so.Skips.Select(s => s.WeekOf);
                 var shouldGenerate = StandingOrderScheduleService.ShouldGenerateForWeek(
                     so.Frequency, so.StartWeek, skippedDates,
                     lastShippedWeek: null, weekOf, so.MonthlyWeek);
 
-                if (!shouldGenerate) continue;
+                if (!shouldGenerate) { skipped++; continue; }
 
-                var boxConfigs = await db.InsulatedBoxConfigs.ToListAsync();
                 var pricingOverrides = await db.CustomerPricings
                     .Where(p => p.CustomerId == so.CustomerId).ToListAsync();
 
                 var instance = new OrderInstance
                 {
-                    Id             = Guid.NewGuid(),
+                    Id              = Guid.NewGuid(),
                     StandingOrderId = so.Id,
-                    CustomerId     = so.CustomerId,
-                    ContactId      = so.ContactId,
-                    Channel        = OrderChannel.Insulated,
-                    Status         = OrderInstanceStatus.Pending,
-                    WeekOf         = weekOf,
-                    IsSample       = so.IsSample,
-                    CreatedAt      = DateTime.UtcNow,
-                    CreatedBy      = userId,
-                    Lines          = so.Lines.Select(l =>
+                    CustomerId      = so.CustomerId,
+                    ContactId       = so.ContactId,
+                    Channel         = OrderChannel.Insulated,
+                    Status          = OrderInstanceStatus.Pending,
+                    WeekOf          = weekOf,
+                    IsSample        = so.IsSample,
+                    CreatedAt       = DateTime.UtcNow,
+                    CreatedBy       = userId,
+                    Lines           = so.Lines.Select(l =>
                     {
-                        var config    = boxConfigs.First(b => b.Size == l.BoxSize);
                         var pricePerLb = PriceResolutionService.ResolveEffectivePricePerLb(l.BoxSize, l.Qty, pricingOverrides);
                         return new OrderInstanceLine
                         {
-                            Id                = Guid.NewGuid(),
-                            BoxSize           = l.BoxSize,
-                            Qty               = l.Qty,
+                            Id                  = Guid.NewGuid(),
+                            BoxSize             = l.BoxSize,
+                            Qty                 = l.Qty,
                             EffectivePricePerLb = pricePerLb
                         };
                     }).ToList()
                 };
 
                 db.OrderInstances.Add(instance);
+                createdInstances.Add((instance, so.Frequency));
 
                 // OnRequest: generate then auto-pause
                 if (so.Frequency == OrderFrequency.OnRequest)
@@ -81,8 +94,66 @@ public static class AdminEndpoints
             }
 
             await db.SaveChangesAsync();
-            return Results.Ok(new { GeneratedCount = created, WeekOf = weekOf });
-        });
+
+            var summaries = createdInstances.Select(t =>
+            {
+                var inst  = t.Instance;
+                var cust  = customerMap.GetValueOrDefault(inst.CustomerId);
+                var (qty, amount) = PriceResolutionService.ComputeOrderInstanceTotals(inst.Lines, boxConfigs);
+                return new GeneratedInstanceSummary(
+                    inst.Id,
+                    inst.CustomerId,
+                    cust?.DisplayName ?? "Unknown",
+                    cust?.CustomerKey,
+                    inst.Channel.ToString(),
+                    inst.WeekOf,
+                    inst.IsSample,
+                    qty,
+                    amount);
+            }).OrderBy(s => s.CustomerDisplayName).ToList();
+
+            return Results.Ok(new GenerateInstancesResponse(created, skipped, weekOf, summaries));
+        }).Produces<GenerateInstancesResponse>();
+
+        // ── Browse instances for a given week ─────────────────────────────────
+        g.MapGet("/instances", async (CustomerDbContext db, DateTime? weekOf = null) =>
+        {
+            var week = SeasonYearService.MondayOf(weekOf ?? DateTime.UtcNow);
+
+            var instances = await db.OrderInstances
+                .Include(i => i.Lines)
+                .Where(i => i.WeekOf.Date == week.Date)
+                .OrderBy(i => i.CustomerId)
+                .ToListAsync();
+
+            var boxConfigs  = await db.InsulatedBoxConfigs.ToListAsync();
+            var customerIds = instances.Select(i => i.CustomerId).Distinct().ToList();
+            var customers   = await db.Customers
+                .Where(c => customerIds.Contains(c.Id))
+                .Select(c => new { c.Id, c.DisplayName, c.CustomerKey })
+                .ToListAsync();
+            var customerMap = customers.ToDictionary(c => c.Id);
+
+            var result = instances.Select(i =>
+            {
+                var cust  = customerMap.GetValueOrDefault(i.CustomerId);
+                var (qty, amount) = PriceResolutionService.ComputeOrderInstanceTotals(i.Lines, boxConfigs);
+                return new WeekInstanceSummary(
+                    i.Id,
+                    i.CustomerId,
+                    cust?.DisplayName ?? "Unknown",
+                    cust?.CustomerKey,
+                    i.Channel.ToString(),
+                    i.Status.ToString(),
+                    i.WeekOf,
+                    i.IsSample,
+                    qty,
+                    amount);
+            }).ToList();
+
+            return Results.Ok(result);
+        }).Produces<IEnumerable<WeekInstanceSummary>>();
+
 
         // ── Season management ─────────────────────────────────────────────────
         g.MapGet("/season/current", () =>

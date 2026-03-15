@@ -27,6 +27,7 @@ else
     <table class="table table-hover">
         <thead>
             <tr>
+                    <th>Customer Key</th>
                     <th>Name</th>
                     <th>Type</th>
                     <th>Channel</th>
@@ -42,6 +43,22 @@ else
             @foreach (var c in _customers)
             {
                 <tr>
+                    <td>
+                        @if (!string.IsNullOrEmpty(c.CustomerKey))
+                        {
+                            <a href="/customers/@c.Id" class="fw-bold font-monospace text-decoration-none fs-6">
+                                @c.CustomerKey
+                            </a>
+                            @if (c.CustomerKeyCollision)
+                            {
+                                <span class="badge bg-warning text-dark ms-1" title="Key collision detected">⚠</span>
+                            }
+                        }
+                        else
+                        {
+                            <span class="text-muted small fst-italic">No key</span>
+                        }
+                    </td>
                     <td><a href="/customers/@c.Id">@c.DisplayName</a></td>
                     <td>@c.Type</td>
                     <td>@c.ChannelType</td>

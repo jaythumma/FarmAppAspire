@@ -43,6 +43,44 @@ public class CustomerMappingTests
     }
 
     [Fact]
+    public void ToSummaryDto_IncludesCustomerKey_WhenSet()
+    {
+        var customer = BuildCustomer();
+        customer.CustomerKey = "TC-DIRECT-001";
+        customer.CustomerKeyCollision = false;
+
+        var dto = customer.ToSummaryDto();
+
+        Assert.Equal("TC-DIRECT-001", dto.CustomerKey);
+        Assert.False(dto.CustomerKeyCollision);
+    }
+
+    [Fact]
+    public void ToSummaryDto_ReflectsCollisionFlag_WhenTrue()
+    {
+        var customer = BuildCustomer();
+        customer.CustomerKey = "TC-DIRECT-001";
+        customer.CustomerKeyCollision = true;
+
+        var dto = customer.ToSummaryDto();
+
+        Assert.Equal("TC-DIRECT-001", dto.CustomerKey);
+        Assert.True(dto.CustomerKeyCollision);
+    }
+
+    [Fact]
+    public void ToSummaryDto_CustomerKey_IsNullWhenNotAssigned()
+    {
+        var customer = BuildCustomer();
+        customer.CustomerKey = null;
+
+        var dto = customer.ToSummaryDto();
+
+        Assert.Null(dto.CustomerKey);
+        Assert.False(dto.CustomerKeyCollision);
+    }
+
+    [Fact]
     public void ToDetailDto_MapsChannelType_Direct()
     {
         var customer = BuildCustomer();
