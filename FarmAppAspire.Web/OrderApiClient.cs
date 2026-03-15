@@ -98,5 +98,6 @@ public record CreateStandingOrderRequest(Guid? ContactId, OrderFrequency Frequen
 public record StandingOrderResult(Guid Id);
 public record UpdateOrderRequest(Guid? ContactId, bool IsSample);
 
-public record OrderSummary(Guid Id, Guid CustomerId, string Channel, string Status, DateTime WeekOf, bool IsSample);
-public record OrderDetail(Guid Id, Guid CustomerId, string Channel, string Status, DateTime WeekOf, bool IsSample, Guid? ContactId);
+public record OrderSummary(Guid Id, Guid CustomerId, string Channel, string Status, DateTime WeekOf, bool IsSample, int TotalQty, decimal TotalAmount);
+public record OrderLine(Guid Id, string? BoxSize, int Qty, decimal? EffectivePricePerLb, string? FedExTierSize, decimal? FedExFixedPrice, string? PackagingType);
+public record OrderDetail(Guid Id, Guid CustomerId, string Channel, string Status, DateTime WeekOf, bool IsSample, Guid? ContactId, int TotalQty, decimal TotalAmount, IReadOnlyList<OrderLine> Lines);
