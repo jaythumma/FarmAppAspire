@@ -90,7 +90,7 @@ public enum OrderFrequency { Weekly, BiWeekly, Monthly, OnRequest, Stopped }
 public enum MonthlyWeek { First = 1, Second = 2, Third = 3, Fourth = 4 }
 
 public record FedExTierInfo(string TierSize, decimal WeightOz, decimal FixedPrice);
-public record InsulatedBoxInfo(string Size, decimal WeightLbs, decimal BasePricePerLb);
+public record InsulatedBoxInfo(string Size, decimal WeightLbs, decimal BasePricePerLb, bool IsDefault = false);
 public record FedExOrderLineRequest(FedExTierSize TierSize, int Qty);
 public record CreateFedExOrderRequest(Guid? ContactId, IReadOnlyList<FedExOrderLineRequest> Lines, DateTime? WeekOf = null, bool IsSample = false);
 public record StandingOrderLineRequest(InsulatedBoxSize BoxSize, int Qty);
