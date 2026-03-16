@@ -7,6 +7,13 @@
 
 <PageTitle>Orders</PageTitle>
 
+<style>
+    .sortable { cursor: pointer; user-select: none; white-space: nowrap; }
+    .sortable:hover { background-color: var(--bs-table-hover-bg, #f8f9fa); }
+    .sort-icon { opacity: 0.4; font-size: 0.75em; }
+    .sort-icon.active { opacity: 1; }
+</style>
+
 <div class="d-flex justify-content-between align-items-center mb-3">
     <h1 class="mb-0">Orders</h1>
     <a href="/orders/create" class="btn btn-primary">Add Order</a>
@@ -20,11 +27,11 @@
     </div>
 }
 
-<div class="row g-3 mb-4">
+<div class="row g-3 mb-4 align-items-end">
     <div class="col-auto">
         <label class="form-label fw-semibold">Customer</label>
-        <select class="form-select" @bind="_selectedCustomerId" @bind:after="LoadOrdersAsync">
-            <option value="">— select customer —</option>
+        <select class="form-select" @bind="_selectedCustomerId" @bind:after="OnFilterChanged">
+            <option value="">— all customers —</option>
             @foreach (var c in _customers)
             {
                 <option value="@c.Id">@c.DisplayName</option>
@@ -33,7 +40,7 @@
     </div>
     <div class="col-auto">
         <label class="form-label fw-semibold">Status</label>
-        <select class="form-select" @bind="_statusFilter" @bind:after="LoadOrdersAsync">
+        <select class="form-select" @bind="_statusFilter" @bind:after="OnFilterChanged">
             <option value="">All</option>
             <option>Pending</option>
             <option>Harvested</option>
@@ -42,8 +49,25 @@
             <option>Cancelled</option>
         </select>
     </div>
-    <div class="col-auto align-self-end">
-        <button class="btn btn-primary" @onclick="LoadOrdersAsync">Search</button>
+    <div class="col-auto">
+        <div class="input-group input-group-sm">
+            <label class="input-group-text" for="orderPageSize">Per page</label>
+            <select id="orderPageSize" class="form-select form-select-sm"
+                    @bind="_pageSize" @bind:after="ResetPage">
+                <option value="10">10</option>
+                <option value="25">25</option>
+                <option value="50">50</option>
+                <option value="100">100</option>
+            </select>
+        </div>
+    </div>
+    <div class="col-auto ms-auto">
+        @if (_allOrders is not null)
+        {
+            <span class="text-muted small">
+                @_allOrders.Length order@(_allOrders.Length == 1 ? "" : "s")
+            </span>
+        }
     </div>
 </div>
 
@@ -51,34 +75,39 @@
 {
     <p><em>Loading...</em></p>
 }
-else if (_orders is not null)
+else if (_allOrders is not null)
 {
-    @if (!_orders.Any())
+    var sorted = OrderListHelper.ApplySort(_allOrders, _sortColumn, _sortAscending);
+    var paged  = OrderListHelper.ApplyPage(sorted, _currentPage, _pageSize);
+
+    @if (paged.Length == 0)
     {
         <p>No orders found.</p>
     }
     else
     {
-        <table class="table table-hover">
+        <table class="table table-hover" aria-label="Orders">
             <thead>
                 <tr>
-                    <th>Week Of</th>
-                    <th>Channel</th>
-                    <th>Status</th>
-                    <th>Qty</th>
-                    <th class="text-end">Amount</th>
+                    @SortHeader("Customer",    "Customer")
+                    @SortHeader("WeekOf",      "Week Of")
+                    @SortHeader("Channel",     "Channel")
+                    @SortHeader("Status",      "Status")
+                    @SortHeader("TotalQty",    "Qty",    "text-center")
+                    @SortHeader("TotalAmount", "Amount", "text-end")
                     <th>Sample</th>
                     <th class="text-end">Actions</th>
                 </tr>
             </thead>
             <tbody>
-                @foreach (var o in _orders)
+                @foreach (var o in paged)
                 {
                     <tr>
+                        <td><a href="/customers/@o.CustomerId">@o.CustomerDisplayName</a></td>
                         <td>@o.WeekOf.ToString("MMM d, yyyy")</td>
                         <td>@o.Channel</td>
                         <td><span class="badge @OrderLifecycleRules.StatusBadgeClass(o.Status)">@o.Status</span></td>
-                        <td>@o.TotalQty</td>
+                        <td class="text-center">@o.TotalQty</td>
                         <td class="text-end">@o.TotalAmount.ToString("C")</td>
                         <td>@(o.IsSample ? "Yes" : "No")</td>
                         <td class="text-end">
@@ -127,12 +156,41 @@ else if (_orders is not null)
                 }
             </tbody>
         </table>
+
+        @* ── Pagination ───────────────────────────────────────────────────────── *@
+        var totalPages = OrderListHelper.TotalPages(_allOrders.Length, _pageSize);
+        @if (totalPages > 1)
+        {
+            <nav aria-label="Order list pagination">
+                <ul class="pagination justify-content-center flex-wrap">
+                    <li class="page-item @(_currentPage == 1 ? "disabled" : "")">
+                        <button class="page-link" @onclick="() => GoToPage(_currentPage - 1)"
+                                aria-label="Previous page">&laquo;</button>
+                    </li>
+                    @for (int p = Math.Max(1, _currentPage - 2); p <= Math.Min(totalPages, _currentPage + 2); p++)
+                    {
+                        int pageNum = p;
+                        <li class="page-item @(_currentPage == pageNum ? "active" : "")">
+                            <button class="page-link" @onclick="() => GoToPage(pageNum)"
+                                    aria-label="Page @pageNum">@pageNum</button>
+                        </li>
+                    }
+                    <li class="page-item @(_currentPage == totalPages ? "disabled" : "")">
+                        <button class="page-link" @onclick="() => GoToPage(_currentPage + 1)"
+                                aria-label="Next page">&raquo;</button>
+                    </li>
+                </ul>
+            </nav>
+            <p class="text-center text-muted small">
+                Page @_currentPage of @totalPages (@_allOrders.Length order@(_allOrders.Length == 1 ? "" : "s"))
+            </p>
+        }
     }
 }
 
 @code {
     private CustomerSummary[] _customers = [];
-    private OrderSummary[]? _orders;
+    private AllOrderSummary[]? _allOrders;
     private string _selectedCustomerId = "";
     private string _statusFilter = "";
     private string? _errorMessage;
@@ -141,41 +199,52 @@ else if (_orders is not null)
     private DateTime _inspectDate = DateTime.Today;
     private readonly CancellationTokenSource _cts = new();
 
+    // ── Sort / page state ─────────────────────────────────────────────────────
+    private string _sortColumn  = "WeekOf";
+    private bool   _sortAscending = false;   // default: newest first
+    private int    _currentPage  = 1;
+    private int    _pageSize     = 25;
+
     protected override async Task OnInitializedAsync()
     {
         _customers = await CustomerApi.GetCustomersAsync(cancellationToken: _cts.Token);
+        await LoadOrdersAsync();
+    }
+
+    private async Task OnFilterChanged()
+    {
+        ResetPage();
+        await LoadOrdersAsync();
     }
 
     private async Task LoadOrdersAsync()
     {
-        if (!Guid.TryParse(_selectedCustomerId, out var customerId)) return;
         _loading = true;
-        _orders = await OrderApi.GetOrdersAsync(
+        Guid? customerId = Guid.TryParse(_selectedCustomerId, out var id) ? id : null;
+        _allOrders = await OrderApi.GetAllOrdersAsync(
             customerId,
             _statusFilter.Length > 0 ? _statusFilter : null,
             _cts.Token);
         _loading = false;
     }
 
-    private async Task CancelOrderAsync(OrderSummary order)
+    private async Task CancelOrderAsync(AllOrderSummary order)
     {
-        if (!Guid.TryParse(_selectedCustomerId, out var customerId)) return;
-        var success = await OrderApi.CancelOrderAsync(customerId, order.Id, _cts.Token);
+        var success = await OrderApi.CancelOrderAsync(order.CustomerId, order.Id, _cts.Token);
         if (success)
             await LoadOrdersAsync();
         else
             _errorMessage = $"Failed to cancel order {order.Id}.";
     }
 
-    private async Task HarvestAsync(OrderSummary order)
+    private async Task HarvestAsync(AllOrderSummary order)
     {
-        if (!Guid.TryParse(_selectedCustomerId, out var customerId)) return;
-        var result = await OrderApi.HarvestOrderAsync(customerId, order.Id, _cts.Token);
+        var result = await OrderApi.HarvestOrderAsync(order.CustomerId, order.Id, _cts.Token);
         if (result is not null) await LoadOrdersAsync();
         else _errorMessage = "Failed to mark as Harvested.";
     }
 
-    private void StartInspect(OrderSummary order)
+    private void StartInspect(AllOrderSummary order)
     {
         _inspectingOrderId = order.Id;
         _inspectDate       = DateTime.Today;
@@ -187,10 +256,9 @@ else if (_orders is not null)
         _inspectingOrderId = null;
     }
 
-    private async Task ConfirmInspectAsync(OrderSummary order)
+    private async Task ConfirmInspectAsync(AllOrderSummary order)
     {
-        if (!Guid.TryParse(_selectedCustomerId, out var customerId)) return;
-        var result = await OrderApi.InspectOrderAsync(customerId, order.Id, _inspectDate, _cts.Token);
+        var result = await OrderApi.InspectOrderAsync(order.CustomerId, order.Id, _inspectDate, _cts.Token);
         if (result is not null)
         {
             _inspectingOrderId = null;
@@ -202,13 +270,56 @@ else if (_orders is not null)
         }
     }
 
-    private async Task ShipAsync(OrderSummary order)
+    private async Task ShipAsync(AllOrderSummary order)
     {
-        if (!Guid.TryParse(_selectedCustomerId, out var customerId)) return;
-        var result = await OrderApi.ShipOrderAsync(customerId, order.Id, _cts.Token);
+        var result = await OrderApi.ShipOrderAsync(order.CustomerId, order.Id, _cts.Token);
         if (result is not null) await LoadOrdersAsync();
         else _errorMessage = "Failed to mark as Shipped.";
     }
 
+    // ── Sort / page helpers ───────────────────────────────────────────────────
+
+    private void Sort(string column)
+    {
+        if (_sortColumn == column)
+            _sortAscending = !_sortAscending;
+        else
+        {
+            _sortColumn    = column;
+            _sortAscending = column != "WeekOf"; // WeekOf defaults to descending; others to ascending
+        }
+        _currentPage = 1;
+    }
+
+    private void GoToPage(int page)
+    {
+        if (_allOrders is null) return;
+        var total = OrderListHelper.TotalPages(_allOrders.Length, _pageSize);
+        _currentPage = Math.Clamp(page, 1, total);
+    }
+
+    private void ResetPage() => _currentPage = 1;
+
+    // ── Render helpers ────────────────────────────────────────────────────────
+
+    private RenderFragment SortHeader(string column, string label, string? extraCss = null) =>
+        builder =>
+        {
+            var isActive = _sortColumn == column;
+            var icon     = !isActive ? "⇅" : (_sortAscending ? "↑" : "↓");
+            var css      = $"sortable{(extraCss is not null ? " " + extraCss : "")}";
+            builder.OpenElement(0, "th");
+            builder.AddAttribute(1, "class", css);
+            builder.AddAttribute(2, "onclick", EventCallback.Factory.Create(this, () => Sort(column)));
+            builder.AddContent(3, label);
+            builder.AddContent(4, " ");
+            builder.OpenElement(5, "span");
+            builder.AddAttribute(6, "class", $"sort-icon{(isActive ? " active" : "")}");
+            builder.AddContent(7, icon);
+            builder.CloseElement();
+            builder.CloseElement();
+        };
+
     public void Dispose() => _cts.Cancel();
 }
+
