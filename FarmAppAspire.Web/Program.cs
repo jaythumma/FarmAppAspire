@@ -4,6 +4,7 @@ using FarmAppAspire.Web.Components.Layout;
 using FarmAppAspire.Web.Data;
 using FarmAppAspire.Web.Services;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -72,6 +73,13 @@ builder.Services.AddHttpClient<WeatherApiClient>(client =>
     });
 
 var app = builder.Build();
+
+// ── Startup migration ────────────────────────────────────────────────────────
+await using (var scope = app.Services.CreateAsyncScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+    await db.Database.MigrateAsync();
+}
 
 if (!app.Environment.IsDevelopment())
 {

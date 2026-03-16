@@ -33,7 +33,90 @@ if (app.Environment.IsDevelopment())
 await using (var scope = app.Services.CreateAsyncScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<CustomerDbContext>();
-    await db.Database.MigrateAsync();
+    var logger = scope.ServiceProvider.GetRequiredService<ILoggerFactory>().CreateLogger("CustomerService.Migrations");
+
+    var pending = (await db.Database.GetPendingMigrationsAsync()).ToList();
+    if (!pending.Any())
+    {
+        logger.LogInformation("No pending EF Core migrations for CustomerDbContext.");
+    }
+    else
+    {
+        try
+        {
+            // If the database already contains the Customers table (created outside of migrations)
+            // attempting to apply migrations will fail with "relation already exists". Detect that
+            // case and skip applying migrations to avoid conflicts in development environments.
+            var conn = db.Database.GetDbConnection();
+            await conn.OpenAsync();
+            await using (var cmd = conn.CreateCommand())
+            {
+                // Use case-insensitive search for the customers table via pg_class to avoid
+                // issues with quoted identifiers (EF may generate quoted names). This
+                // works whether the table was created with or without double quotes.
+                cmd.CommandText =
+                    "SELECT EXISTS (" +
+                    "  SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace" +
+                    "  WHERE n.nspname = 'public' AND lower(c.relname) = lower(@name) AND c.relkind = 'r'" +
+                    ")";
+                var p = cmd.CreateParameter();
+                p.ParameterName = "@name";
+                p.Value = "Customers";
+                cmd.Parameters.Add(p);
+                var existsObj = await cmd.ExecuteScalarAsync();
+                var exists = existsObj is bool b && b;
+                if (!exists)
+                {
+                    logger.LogInformation("Applying {Count} pending EF Core migrations for CustomerDbContext.", pending.Count);
+                    await db.Database.MigrateAsync();
+                }
+                else
+                {
+                    // If the schema exists but the migrations history is empty (database created outside EF),
+                    // mark pending migrations as applied in __EFMigrationsHistory so EF won't attempt to run them.
+                    logger.LogWarning("Detected existing schema (Customers table present) but migrations are pending.");
+
+                    await using (var histCmd = conn.CreateCommand())
+                    {
+                        histCmd.CommandText = "SELECT COUNT(*) FROM \"__EFMigrationsHistory\"";
+                        try
+                        {
+                            var cntObj = await histCmd.ExecuteScalarAsync();
+                            var cnt = Convert.ToInt32(cntObj);
+                            if (cnt == 0)
+                            {
+                                logger.LogInformation("__EFMigrationsHistory is empty but schema exists. Recording pending migrations as applied to avoid duplicate creation.");
+                                foreach (var m in pending)
+                                {
+                                    await using var ins = conn.CreateCommand();
+                                    ins.CommandText = "INSERT INTO \"__EFMigrationsHistory\" (\"MigrationId\", \"ProductVersion\") VALUES (@mid, @pv)";
+                                    var pm = ins.CreateParameter(); pm.ParameterName = "@mid"; pm.Value = m; ins.Parameters.Add(pm);
+                                    var pp = ins.CreateParameter(); pp.ParameterName = "@pv"; pp.Value = "10.0.4"; ins.Parameters.Add(pp);
+                                    await ins.ExecuteNonQueryAsync();
+                                }
+                                logger.LogInformation("Recorded {Count} pending migrations as applied.", pending.Count);
+                            }
+                            else
+                            {
+                                logger.LogWarning("__EFMigrationsHistory already contains entries ({Count}); skipping automatic migrate.", cnt);
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            logger.LogWarning(ex, "Failed to inspect or update __EFMigrationsHistory; skipping automatic migration to avoid conflicts.");
+                        }
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            // If detection fails, attempt to apply migrations (best-effort) but log the error.
+            var lf = scope.ServiceProvider.GetRequiredService<ILoggerFactory>().CreateLogger("CustomerService.Migrations");
+            lf.LogWarning(ex, "Failed to detect existing schema; attempting to apply migrations as fallback.");
+            await db.Database.MigrateAsync();
+        }
+    }
 }
 
 // ── X-User-Id filter ─────────────────────────────────────────────────────────

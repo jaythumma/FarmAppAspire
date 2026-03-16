@@ -339,6 +339,10 @@
                     Nav.NavigateTo($"/customers/{created.Id}");
             }
         }
+        catch (HttpRequestException hre)
+        {
+            _errorMessage = $"Error saving customer: {hre.Message}";
+        }
         catch (Exception ex)
         {
             _errorMessage = $"Error saving customer: {ex.Message}";
