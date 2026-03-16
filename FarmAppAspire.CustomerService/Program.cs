@@ -276,39 +276,36 @@ customers.MapPost("", async (CreateCustomerRequest req, CustomerDbContext db, Ht
         });
     }
 
-    // Auto-generate CustomerKey for Amazon channel customers
-    if (req.ChannelType == ChannelType.Amazon)
+    // Auto-generate CustomerKey for all new customers
+    var keyService = new CustomerKeyService();
+    var keyTarget = new Customer
     {
-        var svc = new CustomerKeyService();
-        var keyTarget = new Customer
-        {
-            Id = customer.Id,
-            DisplayName = customer.DisplayName,
-            ChannelType = ChannelType.Amazon,
-            Addresses =
-            [
-                new CustomerAddress
-                {
-                    Type = AddressType.Shipping,
-                    IsDefault = true,
-                    City = req.ShippingAddress.City,
-                    State = req.ShippingAddress.State,
-                    Line1 = req.ShippingAddress.Line1,
-                    PostalCode = req.ShippingAddress.PostalCode,
-                    Country = req.ShippingAddress.Country,
-                    CreatedAt = now,
-                }
-            ]
-        };
-        var proposed = svc.Generate(keyTarget);
-        var existingKeys = await db.Customers
-            .Where(c => c.CustomerKey != null)
-            .Select(c => new { c.CustomerKey, c.Id })
-            .ToListAsync();
-        customer.CustomerKey = proposed;
-        customer.CustomerKeyCollision = CustomerKeyService.CheckCollision(
-            proposed, customer.Id, existingKeys.Select(e => (e.CustomerKey!, e.Id)));
-    }
+        Id = customer.Id,
+        DisplayName = customer.DisplayName,
+        ChannelType = req.ChannelType,
+        Addresses =
+        [
+            new CustomerAddress
+            {
+                Type = AddressType.Shipping,
+                IsDefault = true,
+                City = req.ShippingAddress.City,
+                State = req.ShippingAddress.State,
+                Line1 = req.ShippingAddress.Line1,
+                PostalCode = req.ShippingAddress.PostalCode,
+                Country = req.ShippingAddress.Country,
+                CreatedAt = now,
+            }
+        ]
+    };
+    var proposedKey = keyService.Generate(keyTarget);
+    var existingKeys = await db.Customers
+        .Where(c => c.CustomerKey != null)
+        .Select(c => new { c.CustomerKey, c.Id })
+        .ToListAsync();
+    customer.CustomerKey = proposedKey;
+    customer.CustomerKeyCollision = CustomerKeyService.CheckCollision(
+        proposedKey, customer.Id, existingKeys.Select(e => (e.CustomerKey!, e.Id)));
 
     await db.SaveChangesAsync();
 
