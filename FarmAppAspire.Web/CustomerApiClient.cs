@@ -25,7 +25,12 @@ public class CustomerApiClient(HttpClient httpClient)
     public async Task<CustomerDetail?> CreateCustomerAsync(CreateCustomerRequest request, CancellationToken cancellationToken = default)
     {
         var response = await httpClient.PostAsJsonAsync("/customers", request, JsonOptions, cancellationToken);
-        response.EnsureSuccessStatusCode();
+        if (!response.IsSuccessStatusCode)
+        {
+            var errorContent = await response.Content.ReadAsStringAsync(cancellationToken);
+            var errorMessage = ExtractErrorMessage(errorContent);
+            throw new HttpRequestException($"{errorMessage}", null, response.StatusCode);
+        }
         return await response.Content.ReadFromJsonAsync<CustomerDetail>(JsonOptions, cancellationToken);
     }
 
@@ -91,6 +96,36 @@ public class CustomerApiClient(HttpClient httpClient)
     {
         var response = await httpClient.DeleteAsync($"/customers/{customerId}/contacts/{contactId}", cancellationToken);
         return response.StatusCode == HttpStatusCode.NoContent;
+    }
+
+    private static string ExtractErrorMessage(string jsonContent)
+    {
+        try
+        {
+            using (var doc = JsonDocument.Parse(jsonContent))
+            {
+                var root = doc.RootElement;
+
+                // Check for 'detail' field (standard problem details)
+                if (root.TryGetProperty("detail", out var detail) && detail.ValueKind == JsonValueKind.String)
+                    return detail.GetString() ?? "An error occurred while saving the customer.";
+
+                // Check for 'title' field
+                if (root.TryGetProperty("title", out var title) && title.ValueKind == JsonValueKind.String)
+                    return title.GetString() ?? "An error occurred while saving the customer.";
+
+                // Check for 'message' field
+                if (root.TryGetProperty("message", out var message) && message.ValueKind == JsonValueKind.String)
+                    return message.GetString() ?? "An error occurred while saving the customer.";
+            }
+        }
+        catch
+        {
+            // If JSON parsing fails, return the raw content
+            return jsonContent;
+        }
+
+        return "An error occurred while saving the customer.";
     }
 }
 
