@@ -61,6 +61,7 @@ public class StandingOrderContactTests : IDisposable
     {
         Id         = Guid.NewGuid(),
         CustomerId = customerId,
+        Channel    = OrderChannel.Insulated,
         ContactId  = contactId,
         Frequency  = OrderFrequency.Weekly,
         SeasonYear = 2024,
@@ -121,24 +122,24 @@ public class StandingOrderContactTests : IDisposable
         await _db.SaveChangesAsync();
 
         // Mirror the instance-generation logic from AdminEndpoints
-        var instance = new OrderInstance
+        var instance = new Order
         {
             Id              = Guid.NewGuid(),
             StandingOrderId = so.Id,
             CustomerId      = so.CustomerId,
             ContactId       = so.ContactId,   // propagation under test
             Channel         = OrderChannel.Insulated,
-            Status          = OrderInstanceStatus.Pending,
+            Status          = OrderStatus.Pending,
             WeekOf          = so.StartWeek,
             IsSample        = so.IsSample,
             CreatedAt       = DateTime.UtcNow,
             CreatedBy       = "test"
         };
 
-        _db.OrderInstances.Add(instance);
+        _db.Orders.Add(instance);
         await _db.SaveChangesAsync();
 
-        var saved = await _db.OrderInstances.FindAsync(instance.Id);
+        var saved = await _db.Orders.FindAsync(instance.Id);
         Assert.Equal(contact.Id, saved!.ContactId);
     }
 
@@ -151,23 +152,23 @@ public class StandingOrderContactTests : IDisposable
         _db.StandingOrders.Add(so);
         await _db.SaveChangesAsync();
 
-        var instance = new OrderInstance
+        var instance = new Order
         {
             Id              = Guid.NewGuid(),
             StandingOrderId = so.Id,
             CustomerId      = so.CustomerId,
             ContactId       = so.ContactId,   // null propagation under test
             Channel         = OrderChannel.Insulated,
-            Status          = OrderInstanceStatus.Pending,
+            Status          = OrderStatus.Pending,
             WeekOf          = so.StartWeek,
             CreatedAt       = DateTime.UtcNow,
             CreatedBy       = "test"
         };
 
-        _db.OrderInstances.Add(instance);
+        _db.Orders.Add(instance);
         await _db.SaveChangesAsync();
 
-        var saved = await _db.OrderInstances.FindAsync(instance.Id);
+        var saved = await _db.Orders.FindAsync(instance.Id);
         Assert.Null(saved!.ContactId);
     }
 
@@ -180,6 +181,7 @@ public class StandingOrderContactTests : IDisposable
 
         // No ContactId provided – retail orders do not require one
         var req = new CreateStandingOrderRequest(
+            Channel: OrderChannel.Insulated,
             ContactId: null,
             Frequency: OrderFrequency.Weekly,
             MonthlyWeek: null,
@@ -209,19 +211,19 @@ public class StandingOrderContactTests : IDisposable
         _db.StandingOrders.Add(so);
 
         // Pre-existing instance (generated before the contact update)
-        var existingInstance = new OrderInstance
+        var existingInstance = new Order
         {
             Id              = Guid.NewGuid(),
             StandingOrderId = so.Id,
             CustomerId      = customer.Id,
             ContactId       = originalContact.Id,
             Channel         = OrderChannel.Insulated,
-            Status          = OrderInstanceStatus.Pending,
+            Status          = OrderStatus.Pending,
             WeekOf          = so.StartWeek,
             CreatedAt       = DateTime.UtcNow,
             CreatedBy       = "test"
         };
-        _db.OrderInstances.Add(existingInstance);
+        _db.Orders.Add(existingInstance);
         await _db.SaveChangesAsync();
 
         // Add a new contact and simulate the PATCH endpoint (UpdateStandingOrderContactRequest)
@@ -248,7 +250,7 @@ public class StandingOrderContactTests : IDisposable
         Assert.Equal(newContact.Id, updatedSo!.ContactId);
 
         // Pre-existing instance retains original ContactId
-        var unchangedInstance = await _db.OrderInstances.FindAsync(existingInstance.Id);
+        var unchangedInstance = await _db.Orders.FindAsync(existingInstance.Id);
         Assert.Equal(originalContact.Id, unchangedInstance!.ContactId);
     }
 }

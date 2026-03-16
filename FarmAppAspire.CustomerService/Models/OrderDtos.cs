@@ -13,6 +13,7 @@ public record UpdateCustomerPricingRequest(decimal PricePerLb, decimal? Shipping
 public record AllStandingOrderDto(
     Guid Id, Guid CustomerId, string CustomerDisplayName,
     ChannelType CustomerChannelType, CustomerType CustomerType,
+    OrderChannel Channel,
     StandingOrderStatus Status, OrderFrequency Frequency, MonthlyWeek? MonthlyWeek,
     bool IsSample, int SeasonYear, DateTime StartWeek,
     int TotalBoxes, decimal TotalWeightLbs, decimal TotalAmount,
@@ -24,6 +25,7 @@ public record StandingOrderSkipDto(Guid Id, DateTime WeekOf);
 
 public record StandingOrderDto(
     Guid Id, Guid CustomerId, Guid? ContactId,
+    OrderChannel Channel,
     StandingOrderStatus Status, OrderFrequency Frequency, MonthlyWeek? MonthlyWeek,
     bool IsSample, int SeasonYear, DateTime StartWeek,
     IReadOnlyList<StandingOrderLineDto> Lines,
@@ -32,6 +34,7 @@ public record StandingOrderDto(
     DateTime CreatedAt, string CreatedBy);
 
 public record CreateStandingOrderRequest(
+    OrderChannel Channel,
     Guid? ContactId,
     OrderFrequency Frequency,
     MonthlyWeek? MonthlyWeek,
@@ -48,8 +51,8 @@ public record UpdateStandingOrderRequest(
 public record AddSkipWeekRequest(DateTime WeekOf);
 public record UpdateStandingOrderContactRequest(Guid? ContactId);
 
-// ── Order instance DTOs ───────────────────────────────────────────────────────
-public record OrderInstanceLineDto(
+// ── Order DTOs ───────────────────────────────────────────────────────────────
+public record OrderLineDto(
     Guid Id,
     InsulatedBoxSize? BoxSize,
     int Qty,
@@ -58,35 +61,44 @@ public record OrderInstanceLineDto(
     decimal? FedExFixedPrice,
     FedExPackagingType? PackagingType);
 
-public record OrderInstanceDto(
-    Guid Id, Guid? StandingOrderId, Guid CustomerId, Guid? ContactId,
-    OrderChannel Channel, OrderInstanceStatus Status,
+public record OrderDto(
+    Guid Id, Guid StandingOrderId, Guid CustomerId, Guid? ContactId,
+    OrderChannel Channel, OrderStatus Status,
     DateTime WeekOf, DateTime? ShipDate, bool IsSample,
-    IReadOnlyList<OrderInstanceLineDto> Lines,
+    IReadOnlyList<OrderLineDto> Lines,
     DateTime CreatedAt,
     int TotalQty,
     decimal TotalAmount);
 
 public record InspectOrderRequest(DateTime InspectionDate);
-public record UpdateOrderInstanceRequest(Guid? ContactId, bool IsSample);
+public record UpdateOrderRequest(Guid? ContactId, bool IsSample);
 
-// ── FedEx order DTOs ──────────────────────────────────────────────────────────
-public record FedExOrderLineRequest(FedExTierSize TierSize, int Qty);
-public record CreateFedExOrderRequest(Guid? ContactId, IReadOnlyList<FedExOrderLineRequest> Lines, DateTime? WeekOf = null, bool IsSample = false);
+// ── Order creation DTOs ──────────────────────────────────────────────────────
+public record CreateOrderLineRequest(
+    InsulatedBoxSize? BoxSize,
+    FedExTierSize? FedExTierSize,
+    int Qty);
+
+public record CreateOrderRequest(
+    OrderChannel Channel,
+    DateTime WeekOf,
+    IReadOnlyList<CreateOrderLineRequest> Lines,
+    Guid? ContactId = null,
+    bool IsSample = false);
 
 // ── Invoice DTOs ──────────────────────────────────────────────────────────────
 public record InvoiceDto(
-    Guid Id, Guid OrderInstanceId, Guid CustomerId,
+    Guid Id, Guid OrderId, Guid CustomerId,
     OrderChannel Channel, int SeasonYear, int SeekNum,
     string Label, DateTime CreatedAt);
 
 // ── Admin DTOs ────────────────────────────────────────────────────────────────
-public record GenerateInstancesRequest(DateTime ForWeek);
+public record GenerateOrdersRequest(DateTime ForWeek);
 public record CustomerKeyDto(string? CustomerKey, bool HasCollision);
 public record SeasonRestartRequest(int TargetSeasonYear);
 
-public record GeneratedInstanceSummary(
-    Guid InstanceId,
+public record GeneratedOrderSummary(
+    Guid OrderId,
     Guid CustomerId,
     string CustomerDisplayName,
     string? CustomerKey,
@@ -96,14 +108,14 @@ public record GeneratedInstanceSummary(
     int TotalQty,
     decimal TotalAmount);
 
-public record GenerateInstancesResponse(
+public record GenerateOrdersResponse(
     int GeneratedCount,
     int SkippedCount,
     DateTime WeekOf,
-    IReadOnlyList<GeneratedInstanceSummary> Instances);
+    IReadOnlyList<GeneratedOrderSummary> Orders);
 
-public record WeekInstanceSummary(
-    Guid InstanceId,
+public record WeekOrderSummary(
+    Guid OrderId,
     Guid CustomerId,
     string CustomerDisplayName,
     string? CustomerKey,
@@ -116,7 +128,7 @@ public record WeekInstanceSummary(
 
 public record AllOrdersSummaryDto(
     Guid Id,
-    Guid? StandingOrderId,
+    Guid StandingOrderId,
     Guid CustomerId,
     string CustomerDisplayName,
     string CustomerChannelType,

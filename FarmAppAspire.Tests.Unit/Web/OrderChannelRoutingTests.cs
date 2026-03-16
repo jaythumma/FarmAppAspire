@@ -32,38 +32,42 @@ public class OrderChannelRoutingTests
         return (new OrderApiClient(http), () => captured);
     }
 
-    // ── Direct channel → standing order endpoint ──────────────────────────────
+    // ── Direct channel → unified order endpoint (Insulated) ─────────────────
 
     [Fact]
-    public async Task CreateStandingOrderAsync_PostsToStandingOrdersEndpoint()
+    public async Task CreateOrderAsync_Insulated_PostsToOrdersEndpoint()
     {
         var customerId = Guid.NewGuid();
-        var responseBody = JsonSerializer.Serialize(new { Id = Guid.NewGuid() }, JsonOptions);
+        var soId = Guid.NewGuid();
+        var responseBody = JsonSerializer.Serialize(
+            new { Id = Guid.NewGuid(), StandingOrderId = soId, CustomerId = customerId,
+                  Channel = "Insulated", Status = "Pending", WeekOf = DateTime.UtcNow, IsSample = false,
+                  ContactId = (Guid?)null },
+            JsonOptions);
         var (client, getRequest) = BuildClient(new HttpResponseMessage(HttpStatusCode.Created)
         {
             Content = new StringContent(responseBody, System.Text.Encoding.UTF8, "application/json")
         });
 
-        var req = new CreateStandingOrderRequest(
-            ContactId: null,
-            Frequency: OrderFrequency.Weekly,
-            MonthlyWeek: null,
-            IsSample: false,
-            Lines: [new StandingOrderLineRequest(InsulatedBoxSize.TenLb, 2)]);
+        var req = new CreateOrderRequest(
+            Channel: OrderChannel.Insulated,
+            WeekOf: DateTime.UtcNow,
+            Lines: [new CreateOrderLineRequest(InsulatedBoxSize.TenLb, null, 2)]);
 
-        var result = await client.CreateStandingOrderAsync(customerId, req, TestContext.Current.CancellationToken);
+        var result = await client.CreateOrderAsync(customerId, req, TestContext.Current.CancellationToken);
 
         var request = getRequest();
         Assert.NotNull(request);
         Assert.Equal(HttpMethod.Post, request.Method);
-        Assert.Contains($"/customers/{customerId}/standing-orders", request.RequestUri!.PathAndQuery);
+        Assert.Contains($"/customers/{customerId}/orders", request.RequestUri!.PathAndQuery);
         Assert.NotNull(result);
     }
 
     [Fact]
-    public async Task CreateStandingOrderAsync_SerialisesLinesWithInsulatedBoxSize()
+    public async Task CreateOrderAsync_SerialisesLinesWithInsulatedBoxSize()
     {
         var customerId = Guid.NewGuid();
+        var soId = Guid.NewGuid();
         string? capturedBody = null;
         var stub = new DelegatingHandlerStub(async (req, _) =>
         {
@@ -71,7 +75,11 @@ public class OrderChannelRoutingTests
             return new HttpResponseMessage(HttpStatusCode.Created)
             {
                 Content = new StringContent(
-                    JsonSerializer.Serialize(new { Id = Guid.NewGuid() }, JsonOptions),
+                    JsonSerializer.Serialize(
+                        new { Id = Guid.NewGuid(), StandingOrderId = soId, CustomerId = customerId,
+                              Channel = "Insulated", Status = "Pending", WeekOf = DateTime.UtcNow,
+                              IsSample = false, ContactId = (Guid?)null },
+                        JsonOptions),
                     System.Text.Encoding.UTF8, "application/json")
             };
         });
@@ -79,48 +87,44 @@ public class OrderChannelRoutingTests
         var http = new HttpClient(stub) { BaseAddress = new Uri("https://customerservice") };
         var client = new OrderApiClient(http);
 
-        var req = new CreateStandingOrderRequest(
-            ContactId: null,
-            Frequency: OrderFrequency.Monthly,
-            MonthlyWeek: MonthlyWeek.Second,
-            IsSample: false,
-            Lines: [new StandingOrderLineRequest(InsulatedBoxSize.FiveLb, 3)]);
+        var req = new CreateOrderRequest(
+            Channel: OrderChannel.Insulated,
+            WeekOf: DateTime.UtcNow,
+            Lines: [new CreateOrderLineRequest(InsulatedBoxSize.FiveLb, null, 3)]);
 
-        await client.CreateStandingOrderAsync(customerId, req, TestContext.Current.CancellationToken);
+        await client.CreateOrderAsync(customerId, req, TestContext.Current.CancellationToken);
 
         Assert.NotNull(capturedBody);
         Assert.Contains("FiveLb", capturedBody);
-        Assert.Contains("Monthly", capturedBody);
-        Assert.Contains("Second", capturedBody);
+        Assert.Contains("Insulated", capturedBody);
     }
 
     [Fact]
-    public async Task CreateStandingOrderAsync_ThrowsHttpRequestException_OnErrorResponse()
+    public async Task CreateOrderAsync_Insulated_ThrowsHttpRequestException_OnConflict()
     {
         var (client, _) = BuildClient(new HttpResponseMessage(HttpStatusCode.Conflict)
         {
-            Content = new StringContent("Customer already has an active standing order.")
+            Content = new StringContent("An order already exists for this standing order and week.")
         });
 
-        var req = new CreateStandingOrderRequest(
-            ContactId: null,
-            Frequency: OrderFrequency.Weekly,
-            MonthlyWeek: null,
-            IsSample: false,
-            Lines: [new StandingOrderLineRequest(InsulatedBoxSize.TenLb, 1)]);
+        var req = new CreateOrderRequest(
+            Channel: OrderChannel.Insulated,
+            WeekOf: DateTime.UtcNow,
+            Lines: [new CreateOrderLineRequest(InsulatedBoxSize.TenLb, null, 1)]);
 
         await Assert.ThrowsAsync<HttpRequestException>(() =>
-            client.CreateStandingOrderAsync(Guid.NewGuid(), req, TestContext.Current.CancellationToken));
+            client.CreateOrderAsync(Guid.NewGuid(), req, TestContext.Current.CancellationToken));
     }
 
-    // ── Amazon channel → FedEx order endpoint ────────────────────────────────
+    // ── Amazon channel → unified order endpoint ──────────────────────────────
 
     [Fact]
-    public async Task CreateFedExOrderAsync_PostsToFedExOrdersEndpoint()
+    public async Task CreateOrderAsync_FedEx_PostsToOrdersEndpoint()
     {
         var customerId = Guid.NewGuid();
+        var soId = Guid.NewGuid();
         var responseBody = JsonSerializer.Serialize(
-            new { Id = Guid.NewGuid(), CustomerId = customerId, Channel = "FedEx",
+            new { Id = Guid.NewGuid(), StandingOrderId = soId, CustomerId = customerId, Channel = "FedEx",
                   Status = "Pending", WeekOf = DateTime.UtcNow, IsSample = false,
                   ContactId = (Guid?)null },
             JsonOptions);
@@ -130,25 +134,25 @@ public class OrderChannelRoutingTests
             Content = new StringContent(responseBody, System.Text.Encoding.UTF8, "application/json")
         });
 
-        var req = new CreateFedExOrderRequest(
-            ContactId: null,
-            Lines: [new FedExOrderLineRequest(FedExTierSize.TwoLb, 1)],
+        var req = new CreateOrderRequest(
+            Channel: OrderChannel.FedEx,
             WeekOf: DateTime.UtcNow,
-            IsSample: false);
+            Lines: [new CreateOrderLineRequest(null, FedExTierSize.TwoLb, 1)]);
 
-        var result = await client.CreateFedExOrderAsync(customerId, req, TestContext.Current.CancellationToken);
+        var result = await client.CreateOrderAsync(customerId, req, TestContext.Current.CancellationToken);
 
         var request = getRequest();
         Assert.NotNull(request);
         Assert.Equal(HttpMethod.Post, request.Method);
-        Assert.Contains($"/customers/{customerId}/fedex-orders", request.RequestUri!.PathAndQuery);
+        Assert.Contains($"/customers/{customerId}/orders", request.RequestUri!.PathAndQuery);
         Assert.NotNull(result);
     }
 
     [Fact]
-    public async Task CreateFedExOrderAsync_SerialisesLinesWithFedExTierSize()
+    public async Task CreateOrderAsync_SerialisesLinesWithFedExTierSize()
     {
         var customerId = Guid.NewGuid();
+        var soId = Guid.NewGuid();
         string? capturedBody = null;
         var stub = new DelegatingHandlerStub(async (req, _) =>
         {
@@ -157,7 +161,7 @@ public class OrderChannelRoutingTests
             {
                 Content = new StringContent(
                     JsonSerializer.Serialize(
-                        new { Id = Guid.NewGuid(), CustomerId = customerId, Channel = "FedEx",
+                        new { Id = Guid.NewGuid(), StandingOrderId = soId, CustomerId = customerId, Channel = "FedEx",
                               Status = "Pending", WeekOf = DateTime.UtcNow, IsSample = false,
                               ContactId = (Guid?)null },
                         JsonOptions),
@@ -168,13 +172,12 @@ public class OrderChannelRoutingTests
         var http = new HttpClient(stub) { BaseAddress = new Uri("https://customerservice") };
         var client = new OrderApiClient(http);
 
-        var req = new CreateFedExOrderRequest(
-            ContactId: null,
-            Lines: [new FedExOrderLineRequest(FedExTierSize.FiveLb, 2)],
-            WeekOf: null,
-            IsSample: false);
+        var req = new CreateOrderRequest(
+            Channel: OrderChannel.FedEx,
+            WeekOf: DateTime.UtcNow,
+            Lines: [new CreateOrderLineRequest(null, FedExTierSize.FiveLb, 2)]);
 
-        await client.CreateFedExOrderAsync(customerId, req, TestContext.Current.CancellationToken);
+        await client.CreateOrderAsync(customerId, req, TestContext.Current.CancellationToken);
 
         Assert.NotNull(capturedBody);
         Assert.Contains("FiveLb", capturedBody);
@@ -217,25 +220,27 @@ public class OrderChannelRoutingTests
         {
             new
             {
-                Id         = Guid.NewGuid(),
-                CustomerId = customerId,
-                Channel    = "Direct",
-                Status     = "Pending",
-                WeekOf     = DateTime.UtcNow,
-                IsSample   = false,
-                TotalQty   = 5,
-                TotalAmount = 325.00m
+                Id              = Guid.NewGuid(),
+                StandingOrderId = Guid.NewGuid(),
+                CustomerId      = customerId,
+                Channel         = "Direct",
+                Status          = "Pending",
+                WeekOf          = DateTime.UtcNow,
+                IsSample        = false,
+                TotalQty        = 5,
+                TotalAmount     = 325.00m
             },
             new
             {
-                Id         = Guid.NewGuid(),
-                CustomerId = customerId,
-                Channel    = "FedEx",
-                Status     = "Shipped",
-                WeekOf     = DateTime.UtcNow.AddDays(-7),
-                IsSample   = false,
-                TotalQty   = 2,
-                TotalAmount = 90.00m
+                Id              = Guid.NewGuid(),
+                StandingOrderId = Guid.NewGuid(),
+                CustomerId      = customerId,
+                Channel         = "FedEx",
+                Status          = "Shipped",
+                WeekOf          = DateTime.UtcNow.AddDays(-7),
+                IsSample        = false,
+                TotalQty        = 2,
+                TotalAmount     = 90.00m
             }
         };
 
@@ -249,7 +254,7 @@ public class OrderChannelRoutingTests
 
         var request = getRequest();
         Assert.NotNull(request);
-        Assert.Contains($"/customers/{customerId}/order-instances", request.RequestUri!.PathAndQuery);
+        Assert.Contains($"/customers/{customerId}/orders", request.RequestUri!.PathAndQuery);
         Assert.Equal(2, result.Length);
         Assert.Equal(5,      result[0].TotalQty);
         Assert.Equal(325.00m, result[0].TotalAmount);

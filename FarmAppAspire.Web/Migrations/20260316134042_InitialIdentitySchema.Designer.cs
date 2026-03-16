@@ -12,7 +12,7 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace FarmAppAspire.Web.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    [Migration("20260314194822_InitialIdentitySchema")]
+    [Migration("20260316134042_InitialIdentitySchema")]
     partial class InitialIdentitySchema
     {
         /// <inheritdoc />

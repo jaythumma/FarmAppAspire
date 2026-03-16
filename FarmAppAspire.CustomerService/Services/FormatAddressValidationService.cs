@@ -32,7 +32,18 @@ public partial class FormatAddressValidationService : IAddressValidationService
     // ── Supported country codes ───────────────────────────────────────────────
     private static readonly HashSet<string> SupportedCountries = new(StringComparer.OrdinalIgnoreCase)
     {
-        "US", "CA"
+        "US", "CA", "United States", "United States of America", "USA", "Canada"
+    };
+
+    // Map common country names / synonyms to supported country codes
+    private static readonly Dictionary<string, string> CountrySynonyms = new(StringComparer.OrdinalIgnoreCase)
+    {
+        { "UNITED STATES", "US" },
+        { "UNITED STATES OF AMERICA", "US" },
+        { "USA", "US" },
+        { "US", "US" },
+        { "CANADA", "CA" },
+        { "CA", "CA" }
     };
 
     // ── Postal-code patterns ──────────────────────────────────────────────────
@@ -81,21 +92,23 @@ public partial class FormatAddressValidationService : IAddressValidationService
         else
         {
             // Country-specific state and postal-code validation
-            var normalizedCountry = country.Trim().ToUpperInvariant();
+            var normalizedCountry = NormalizeCountry(country);
 
             if (!string.IsNullOrWhiteSpace(state))
             {
-                if (normalizedCountry == "US" && !UsStateAbbreviations.Contains(state.Trim()))
+                var normalizedState = state.Trim().ToUpperInvariant();
+                if (normalizedCountry == "US" && !UsStateAbbreviations.Contains(normalizedState))
                     errors.Add($"'{state}' is not a valid US state or territory abbreviation.");
-                else if (normalizedCountry == "CA" && !CaProvinceAbbreviations.Contains(state.Trim()))
+                else if (normalizedCountry == "CA" && !CaProvinceAbbreviations.Contains(normalizedState))
                     errors.Add($"'{state}' is not a valid Canadian province or territory abbreviation.");
             }
 
             if (!string.IsNullOrWhiteSpace(postalCode))
             {
-                if (normalizedCountry == "US" && !UsZipPattern().IsMatch(postalCode.Trim()))
+                var trimmedPostal = postalCode.Trim();
+                if (normalizedCountry == "US" && !UsZipPattern().IsMatch(trimmedPostal))
                     errors.Add($"'{postalCode}' is not a valid US ZIP code (expected 5 digits or 5+4 format, e.g. 62701 or 62701-1234).");
-                else if (normalizedCountry == "CA" && !CaPostalPattern().IsMatch(postalCode.Trim()))
+                else if (normalizedCountry == "CA" && !CaPostalPattern().IsMatch(trimmedPostal))
                     errors.Add($"'{postalCode}' is not a valid Canadian postal code (expected format A1A 1A1).");
             }
         }
@@ -105,5 +118,13 @@ public partial class FormatAddressValidationService : IAddressValidationService
             : AddressValidationResult.Invalid([.. errors]);
 
         return Task.FromResult(result);
+    }
+
+    private static string NormalizeCountry(string country)
+    {
+        if (string.IsNullOrWhiteSpace(country)) return string.Empty;
+        var key = country.Trim().ToUpperInvariant();
+        if (CountrySynonyms.TryGetValue(key, out var mapped)) return mapped;
+        return key;
     }
 }

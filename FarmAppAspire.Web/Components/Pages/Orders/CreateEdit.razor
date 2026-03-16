@@ -42,7 +42,7 @@ else
                 </select>
             </div>
 
-            @if (_channelType == ChannelType.Amazon)
+            @if (!IsEdit)
             {
                 <div class="mb-3">
                     <label class="form-label fw-semibold">Week Of *</label>
@@ -136,33 +136,6 @@ else
 
         @if (!IsEdit)
         {
-            @if (_channelType == ChannelType.Direct)
-            {
-                <div class="mb-3">
-                    <label class="form-label fw-semibold">Frequency *</label>
-                    <InputSelect @bind-Value="_model.Frequency" class="form-select">
-                        @foreach (var f in Enum.GetValues<OrderFrequency>().Where(f => f != OrderFrequency.Stopped))
-                        {
-                            <option value="@f">@f</option>
-                        }
-                    </InputSelect>
-                </div>
-
-                @if (_model.Frequency == OrderFrequency.Monthly)
-                {
-                    <div class="mb-3">
-                        <label class="form-label fw-semibold">Monthly Week *</label>
-                        <InputSelect @bind-Value="_model.MonthlyWeek" class="form-select">
-                            <option value="">— select week —</option>
-                            @foreach (var w in Enum.GetValues<MonthlyWeek>())
-                            {
-                                <option value="@w">@w</option>
-                            }
-                        </InputSelect>
-                    </div>
-                }
-            }
-
             <h5>Order Lines</h5>
             @foreach (var (line, idx) in _model.Lines.Select((l, i) => (l, i)))
             {
@@ -322,7 +295,9 @@ else
 
                 Guid? contactId = Guid.TryParse(_model.ContactId, out var cid) ? cid : null;
 
-                if (_channelType == ChannelType.Direct)
+                var channelEnum = _channelType == ChannelType.Amazon ? OrderChannel.FedEx : OrderChannel.Insulated;
+
+                if (channelEnum == OrderChannel.Insulated)
                 {
                     var invalidLines = _model.Lines.Where(l => string.IsNullOrEmpty(l.BoxSize) || l.Qty < 1).ToList();
                     if (invalidLines.Count > 0)
@@ -330,24 +305,6 @@ else
                         _errorMessage = "All lines must have a box size selected and quantity of at least 1.";
                         return;
                     }
-
-                    if (_model.Frequency == OrderFrequency.Monthly && _model.MonthlyWeek is null)
-                    {
-                        _errorMessage = "Monthly week is required for monthly frequency.";
-                        return;
-                    }
-
-                    var lines = _model.Lines
-                        .Select(l => new StandingOrderLineRequest(Enum.Parse<InsulatedBoxSize>(l.BoxSize), l.Qty))
-                        .ToList();
-
-                    var result = await OrderApi.CreateStandingOrderAsync(
-                        customerId,
-                        new CreateStandingOrderRequest(contactId, _model.Frequency, _model.MonthlyWeek, _model.IsSample, lines),
-                        _cts.Token);
-
-                    if (result is not null)
-                        Nav.NavigateTo("/orders");
                 }
                 else
                 {
@@ -357,19 +314,19 @@ else
                         _errorMessage = "All lines must have a tier selected and quantity of at least 1.";
                         return;
                     }
-
-                    var lines = _model.Lines
-                        .Select(l => new FedExOrderLineRequest(Enum.Parse<FedExTierSize>(l.TierSize), l.Qty))
-                        .ToList();
-
-                    var result = await OrderApi.CreateFedExOrderAsync(
-                        customerId,
-                        new CreateFedExOrderRequest(contactId, lines, _model.WeekOf, _model.IsSample),
-                        _cts.Token);
-
-                    if (result is not null)
-                        Nav.NavigateTo("/orders");
                 }
+
+                var lines = channelEnum == OrderChannel.Insulated
+                    ? _model.Lines.Select(l => new CreateOrderLineRequest(Enum.Parse<InsulatedBoxSize>(l.BoxSize!), null, l.Qty)).ToList()
+                    : _model.Lines.Select(l => new CreateOrderLineRequest(null, Enum.Parse<FedExTierSize>(l.TierSize!), l.Qty)).ToList();
+
+                var result = await OrderApi.CreateOrderAsync(
+                    customerId,
+                    new CreateOrderRequest(channelEnum, _model.WeekOf, lines, contactId, _model.IsSample),
+                    _cts.Token);
+
+                if (result is not null)
+                    Nav.NavigateTo("/orders");
             }
         }
         catch (HttpRequestException ex)
@@ -394,8 +351,6 @@ else
         public DateTime WeekOf { get; set; } = DateTime.Today;
         public bool IsSample { get; set; }
         public string? ContactId { get; set; }
-        public OrderFrequency Frequency { get; set; } = OrderFrequency.Weekly;
-        public MonthlyWeek? MonthlyWeek { get; set; }
         public List<LineModel> Lines { get; set; } = [new LineModel()];
     }
 

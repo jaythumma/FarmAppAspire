@@ -16,8 +16,8 @@ public class CustomerDbContext : DbContext
     public DbSet<StandingOrder> StandingOrders => Set<StandingOrder>();
     public DbSet<StandingOrderLine> StandingOrderLines => Set<StandingOrderLine>();
     public DbSet<StandingOrderSkip> StandingOrderSkips => Set<StandingOrderSkip>();
-    public DbSet<OrderInstance> OrderInstances => Set<OrderInstance>();
-    public DbSet<OrderInstanceLine> OrderInstanceLines => Set<OrderInstanceLine>();
+    public DbSet<Order> Orders => Set<Order>();
+    public DbSet<OrderLine> OrderLines => Set<OrderLine>();
     public DbSet<Invoice> Invoices => Set<Invoice>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -95,13 +95,15 @@ public class CustomerDbContext : DbContext
         modelBuilder.Entity<StandingOrder>(e =>
         {
             e.HasKey(x => x.Id);
+            e.Property(x => x.Channel).HasConversion<string>();
             e.Property(x => x.Status).HasConversion<string>();
             e.Property(x => x.Frequency).HasConversion<string>();
             e.Property(x => x.MonthlyWeek).HasConversion<string>();
             e.HasMany(x => x.Lines).WithOne(l => l.StandingOrder).HasForeignKey(l => l.StandingOrderId).OnDelete(DeleteBehavior.Cascade);
             e.HasMany(x => x.Skips).WithOne(s => s.StandingOrder).HasForeignKey(s => s.StandingOrderId).OnDelete(DeleteBehavior.Cascade);
-            e.HasMany(x => x.Instances).WithOne(i => i.StandingOrder).HasForeignKey(i => i.StandingOrderId).OnDelete(DeleteBehavior.SetNull);
+            e.HasMany(x => x.Orders).WithOne(i => i.StandingOrder).HasForeignKey(i => i.StandingOrderId).OnDelete(DeleteBehavior.Restrict);
             e.HasIndex(x => new { x.CustomerId, x.Status });
+            e.HasIndex(x => new { x.CustomerId, x.Channel }).IsUnique();
         });
 
         modelBuilder.Entity<StandingOrderLine>(e =>
@@ -118,17 +120,17 @@ public class CustomerDbContext : DbContext
 
         // ── Order instances ───────────────────────────────────────────────────
 
-        modelBuilder.Entity<OrderInstance>(e =>
+        modelBuilder.Entity<Order>(e =>
         {
             e.HasKey(x => x.Id);
             e.Property(x => x.Channel).HasConversion<string>();
             e.Property(x => x.Status).HasConversion<string>();
-            e.HasMany(x => x.Lines).WithOne(l => l.OrderInstance).HasForeignKey(l => l.OrderInstanceId).OnDelete(DeleteBehavior.Cascade);
-            e.HasOne(x => x.Invoice).WithOne(i => i.OrderInstance).HasForeignKey<Invoice>(i => i.OrderInstanceId).OnDelete(DeleteBehavior.Cascade);
+            e.HasMany(x => x.Lines).WithOne(l => l.Order).HasForeignKey(l => l.OrderId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(x => x.Invoice).WithOne(i => i.Order).HasForeignKey<Invoice>(i => i.OrderId).OnDelete(DeleteBehavior.Cascade);
             e.HasIndex(x => new { x.CustomerId, x.WeekOf, x.Status });
         });
 
-        modelBuilder.Entity<OrderInstanceLine>(e =>
+        modelBuilder.Entity<OrderLine>(e =>
         {
             e.HasKey(x => x.Id);
             e.Property(x => x.BoxSize).HasConversion<string>();

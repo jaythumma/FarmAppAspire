@@ -1,0 +1,14 @@
+﻿  Determining projects to restore...
+  All projects are up-to-date for restore.
+  FarmAppAspire.ServiceDefaults -> C:\develop\jaythumma-git\NFarmAppAspire\FarmAppAspire.ServiceDefaults\bin\Debug\net10.0\FarmAppAspire.ServiceDefaults.dll
+  FarmAppAspire.CustomerService -> C:\develop\jaythumma-git\NFarmAppAspire\FarmAppAspire.CustomerService\bin\Debug\net10.0\FarmAppAspire.CustomerService.dll
+  FarmAppAspire.FarmService -> C:\develop\jaythumma-git\NFarmAppAspire\FarmAppAspire.FarmService\bin\Debug\net10.0\FarmAppAspire.FarmService.dll
+  FarmAppAspire.Web -> C:\develop\jaythumma-git\NFarmAppAspire\FarmAppAspire.Web\bin\Debug\net10.0\FarmAppAspire.Web.dll
+  FarmAppAspire.AppHost -> C:\develop\jaythumma-git\NFarmAppAspire\FarmAppAspire.AppHost\bin\Debug\net10.0\FarmAppAspire.AppHost.dll
+  FarmAppAspire.Tests -> C:\develop\jaythumma-git\NFarmAppAspire\FarmAppAspire.Tests\bin\Debug\net10.0\FarmAppAspire.Tests.dll
+
+Build succeeded.
+    0 Warning(s)
+    0 Error(s)
+
+Time Elapsed 00:00:12.23

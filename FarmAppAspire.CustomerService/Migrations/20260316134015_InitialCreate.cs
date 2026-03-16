@@ -149,6 +149,7 @@ namespace FarmAppAspire.CustomerService.Migrations
                     Id = table.Column<Guid>(type: "uuid", nullable: false),
                     CustomerId = table.Column<Guid>(type: "uuid", nullable: false),
                     ContactId = table.Column<Guid>(type: "uuid", nullable: true),
+                    Channel = table.Column<string>(type: "text", nullable: false),
                     Status = table.Column<string>(type: "text", nullable: false),
                     Frequency = table.Column<string>(type: "text", nullable: false),
                     MonthlyWeek = table.Column<string>(type: "text", nullable: true),
@@ -177,11 +178,11 @@ namespace FarmAppAspire.CustomerService.Migrations
                 });
 
             migrationBuilder.CreateTable(
-                name: "OrderInstances",
+                name: "Orders",
                 columns: table => new
                 {
                     Id = table.Column<Guid>(type: "uuid", nullable: false),
-                    StandingOrderId = table.Column<Guid>(type: "uuid", nullable: true),
+                    StandingOrderId = table.Column<Guid>(type: "uuid", nullable: false),
                     CustomerId = table.Column<Guid>(type: "uuid", nullable: false),
                     ContactId = table.Column<Guid>(type: "uuid", nullable: true),
                     Channel = table.Column<string>(type: "text", nullable: false),
@@ -196,24 +197,24 @@ namespace FarmAppAspire.CustomerService.Migrations
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("PK_OrderInstances", x => x.Id);
+                    table.PrimaryKey("PK_Orders", x => x.Id);
                     table.ForeignKey(
-                        name: "FK_OrderInstances_CustomerContacts_ContactId",
+                        name: "FK_Orders_CustomerContacts_ContactId",
                         column: x => x.ContactId,
                         principalTable: "CustomerContacts",
                         principalColumn: "Id");
                     table.ForeignKey(
-                        name: "FK_OrderInstances_Customers_CustomerId",
+                        name: "FK_Orders_Customers_CustomerId",
                         column: x => x.CustomerId,
                         principalTable: "Customers",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Cascade);
                     table.ForeignKey(
-                        name: "FK_OrderInstances_StandingOrders_StandingOrderId",
+                        name: "FK_Orders_StandingOrders_StandingOrderId",
                         column: x => x.StandingOrderId,
                         principalTable: "StandingOrders",
                         principalColumn: "Id",
-                        onDelete: ReferentialAction.SetNull);
+                        onDelete: ReferentialAction.Restrict);
                 });
 
             migrationBuilder.CreateTable(
@@ -261,7 +262,7 @@ namespace FarmAppAspire.CustomerService.Migrations
                 columns: table => new
                 {
                     Id = table.Column<Guid>(type: "uuid", nullable: false),
-                    OrderInstanceId = table.Column<Guid>(type: "uuid", nullable: false),
+                    OrderId = table.Column<Guid>(type: "uuid", nullable: false),
                     CustomerId = table.Column<Guid>(type: "uuid", nullable: false),
                     Channel = table.Column<string>(type: "text", nullable: false),
                     SeasonYear = table.Column<int>(type: "integer", nullable: false),
@@ -279,19 +280,19 @@ namespace FarmAppAspire.CustomerService.Migrations
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Cascade);
                     table.ForeignKey(
-                        name: "FK_Invoices_OrderInstances_OrderInstanceId",
-                        column: x => x.OrderInstanceId,
-                        principalTable: "OrderInstances",
+                        name: "FK_Invoices_Orders_OrderId",
+                        column: x => x.OrderId,
+                        principalTable: "Orders",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Cascade);
                 });
 
             migrationBuilder.CreateTable(
-                name: "OrderInstanceLines",
+                name: "OrderLines",
                 columns: table => new
                 {
                     Id = table.Column<Guid>(type: "uuid", nullable: false),
-                    OrderInstanceId = table.Column<Guid>(type: "uuid", nullable: false),
+                    OrderId = table.Column<Guid>(type: "uuid", nullable: false),
                     BoxSize = table.Column<string>(type: "text", nullable: true),
                     EffectivePricePerLb = table.Column<decimal>(type: "numeric", nullable: true),
                     FedExTierSize = table.Column<string>(type: "text", nullable: true),
@@ -301,11 +302,11 @@ namespace FarmAppAspire.CustomerService.Migrations
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("PK_OrderInstanceLines", x => x.Id);
+                    table.PrimaryKey("PK_OrderLines", x => x.Id);
                     table.ForeignKey(
-                        name: "FK_OrderInstanceLines_OrderInstances_OrderInstanceId",
-                        column: x => x.OrderInstanceId,
-                        principalTable: "OrderInstances",
+                        name: "FK_OrderLines_Orders_OrderId",
+                        column: x => x.OrderId,
+                        principalTable: "Orders",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Cascade);
                 });
@@ -364,29 +365,29 @@ namespace FarmAppAspire.CustomerService.Migrations
                 unique: true);
 
             migrationBuilder.CreateIndex(
-                name: "IX_Invoices_OrderInstanceId",
+                name: "IX_Invoices_OrderId",
                 table: "Invoices",
-                column: "OrderInstanceId",
+                column: "OrderId",
                 unique: true);
 
             migrationBuilder.CreateIndex(
-                name: "IX_OrderInstanceLines_OrderInstanceId",
-                table: "OrderInstanceLines",
-                column: "OrderInstanceId");
+                name: "IX_OrderLines_OrderId",
+                table: "OrderLines",
+                column: "OrderId");
 
             migrationBuilder.CreateIndex(
-                name: "IX_OrderInstances_ContactId",
-                table: "OrderInstances",
+                name: "IX_Orders_ContactId",
+                table: "Orders",
                 column: "ContactId");
 
             migrationBuilder.CreateIndex(
-                name: "IX_OrderInstances_CustomerId_WeekOf_Status",
-                table: "OrderInstances",
+                name: "IX_Orders_CustomerId_WeekOf_Status",
+                table: "Orders",
                 columns: new[] { "CustomerId", "WeekOf", "Status" });
 
             migrationBuilder.CreateIndex(
-                name: "IX_OrderInstances_StandingOrderId",
-                table: "OrderInstances",
+                name: "IX_Orders_StandingOrderId",
+                table: "Orders",
                 column: "StandingOrderId");
 
             migrationBuilder.CreateIndex(
@@ -398,6 +399,12 @@ namespace FarmAppAspire.CustomerService.Migrations
                 name: "IX_StandingOrders_ContactId",
                 table: "StandingOrders",
                 column: "ContactId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_StandingOrders_CustomerId_Channel",
+                table: "StandingOrders",
+                columns: new[] { "CustomerId", "Channel" },
+                unique: true);
 
             migrationBuilder.CreateIndex(
                 name: "IX_StandingOrders_CustomerId_Status",
@@ -430,7 +437,7 @@ namespace FarmAppAspire.CustomerService.Migrations
                 name: "Invoices");
 
             migrationBuilder.DropTable(
-                name: "OrderInstanceLines");
+                name: "OrderLines");
 
             migrationBuilder.DropTable(
                 name: "StandingOrderLines");
@@ -439,7 +446,7 @@ namespace FarmAppAspire.CustomerService.Migrations
                 name: "StandingOrderSkips");
 
             migrationBuilder.DropTable(
-                name: "OrderInstances");
+                name: "Orders");
 
             migrationBuilder.DropTable(
                 name: "StandingOrders");

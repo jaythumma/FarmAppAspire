@@ -22,7 +22,7 @@ public enum MonthlyWeek { First = 1, Second = 2, Third = 3, Fourth = 4 }
 
 public enum StandingOrderStatus { Active, Paused, Stopped }
 
-public enum OrderInstanceStatus { Pending, Harvested, Inspected, Shipped, Cancelled }
+public enum OrderStatus { Pending, Harvested, Inspected, Shipped, Cancelled }
 
 public enum OrderChannel { Insulated, FedEx }
 

@@ -33,6 +33,6 @@ public static class InvoiceEndpoints
     }
 
     private static InvoiceDto ToDto(Invoice i) =>
-        new(i.Id, i.OrderInstanceId, i.CustomerId, i.Channel,
+        new(i.Id, i.OrderId, i.CustomerId, i.Channel,
             i.SeasonYear, i.SeekNum, i.Label, i.CreatedAt);
 }

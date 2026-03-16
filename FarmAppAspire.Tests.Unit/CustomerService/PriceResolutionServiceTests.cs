@@ -89,10 +89,10 @@ public class PriceResolutionServiceTests
 
     // ── Order instance aggregated totals ──────────────────────────────────────
 
-    private static OrderInstanceLine InsulatedLine(InsulatedBoxSize size, int qty, decimal pricePerLb) =>
+    private static OrderLine InsulatedLine(InsulatedBoxSize size, int qty, decimal pricePerLb) =>
         new() { Id = Guid.NewGuid(), BoxSize = size, Qty = qty, EffectivePricePerLb = pricePerLb };
 
-    private static OrderInstanceLine FedExLine(FedExTierSize tier, int qty, decimal fixedPrice) =>
+    private static OrderLine FedExLine(FedExTierSize tier, int qty, decimal fixedPrice) =>
         new() { Id = Guid.NewGuid(), FedExTierSize = tier, Qty = qty, FedExFixedPrice = fixedPrice };
 
     [Fact]
@@ -104,7 +104,7 @@ public class PriceResolutionServiceTests
             FedExLine(FedExTierSize.FiveLb, 2, 45.00m)
         };
 
-        var (totalQty, totalAmount) = PriceResolutionService.ComputeOrderInstanceTotals(lines, []);
+        var (totalQty, totalAmount) = PriceResolutionService.ComputeOrderTotals(lines, []);
 
         Assert.Equal(5,      totalQty);
         Assert.Equal(165.00m, totalAmount); // (3×25) + (2×45)
@@ -124,7 +124,7 @@ public class PriceResolutionServiceTests
             Box(InsulatedBoxSize.TwelveLb, 12m)
         };
 
-        var (totalQty, totalAmount) = PriceResolutionService.ComputeOrderInstanceTotals(lines, boxConfigs);
+        var (totalQty, totalAmount) = PriceResolutionService.ComputeOrderTotals(lines, boxConfigs);
 
         Assert.Equal(7,      totalQty);
         // (2 × 13.00 × 5) + (5 × 11.50 × 12) = 130 + 690 = 820
@@ -134,7 +134,7 @@ public class PriceResolutionServiceTests
     [Fact]
     public void ComputeOrderInstanceTotals_EmptyLines_ReturnsZeros()
     {
-        var (totalQty, totalAmount) = PriceResolutionService.ComputeOrderInstanceTotals([], []);
+        var (totalQty, totalAmount) = PriceResolutionService.ComputeOrderTotals([], []);
 
         Assert.Equal(0,  totalQty);
         Assert.Equal(0m, totalAmount);
@@ -148,7 +148,7 @@ public class PriceResolutionServiceTests
             InsulatedLine(InsulatedBoxSize.TwelveLb, 3, 13.00m)
         };
         // no box configs provided — amount should be 0 but qty should still count
-        var (totalQty, totalAmount) = PriceResolutionService.ComputeOrderInstanceTotals(lines, []);
+        var (totalQty, totalAmount) = PriceResolutionService.ComputeOrderTotals(lines, []);
 
         Assert.Equal(3,  totalQty);
         Assert.Equal(0m, totalAmount);

@@ -60,9 +60,9 @@ customers.MapGet("", async (CustomerDbContext db, int page = 1, int size = 25) =
     var customerIds = customerPage.Select(c => c.Id).ToList();
     var boxConfigs  = await db.InsulatedBoxConfigs.ToListAsync();
 
-    var orders = await db.OrderInstances
+    var orders = await db.Orders
         .Include(o => o.Lines)
-        .Where(o => customerIds.Contains(o.CustomerId) && o.Status != OrderInstanceStatus.Cancelled)
+        .Where(o => customerIds.Contains(o.CustomerId) && o.Status != OrderStatus.Cancelled)
         .ToListAsync();
 
     var ordersByCustomer = orders
@@ -74,7 +74,7 @@ customers.MapGet("", async (CustomerDbContext db, int page = 1, int size = 25) =
         var customerOrders = ordersByCustomer.GetValueOrDefault(c.Id, []);
         var orderCount    = customerOrders.Count;
         var totalAmount   = customerOrders.Sum(o =>
-            PriceResolutionService.ComputeOrderInstanceTotals(o.Lines, boxConfigs).TotalAmount);
+            PriceResolutionService.ComputeOrderTotals(o.Lines, boxConfigs).TotalAmount);
         return c.ToSummaryDto(orderCount, totalAmount);
     }).ToList();
 
@@ -91,14 +91,14 @@ customers.MapGet("{id:guid}", async (Guid id, CustomerDbContext db) =>
     if (c is null) return Results.NotFound();
 
     var boxConfigs = await db.InsulatedBoxConfigs.ToListAsync();
-    var orders     = await db.OrderInstances
+    var orders     = await db.Orders
         .Include(o => o.Lines)
-        .Where(o => o.CustomerId == id && o.Status != OrderInstanceStatus.Cancelled)
+        .Where(o => o.CustomerId == id && o.Status != OrderStatus.Cancelled)
         .ToListAsync();
 
     var orderCount  = orders.Count;
     var totalAmount = orders.Sum(o =>
-        PriceResolutionService.ComputeOrderInstanceTotals(o.Lines, boxConfigs).TotalAmount);
+        PriceResolutionService.ComputeOrderTotals(o.Lines, boxConfigs).TotalAmount);
 
     return Results.Ok(c.ToDetailDto(orderCount, totalAmount));
 });
@@ -274,13 +274,13 @@ customers.MapPut("{id:guid}", async (Guid id, UpdateCustomerRequest req, Custome
     await db.SaveChangesAsync();
     var full = await db.Customers.Include(x => x.Contacts).Include(x => x.Addresses).FirstAsync(x => x.Id == id);
     var putBoxConfigs = await db.InsulatedBoxConfigs.ToListAsync();
-    var putOrders     = await db.OrderInstances
+    var putOrders     = await db.Orders
         .Include(o => o.Lines)
-        .Where(o => o.CustomerId == id && o.Status != OrderInstanceStatus.Cancelled)
+        .Where(o => o.CustomerId == id && o.Status != OrderStatus.Cancelled)
         .ToListAsync();
     var putOrderCount  = putOrders.Count;
     var putTotalAmount = putOrders.Sum(o =>
-        PriceResolutionService.ComputeOrderInstanceTotals(o.Lines, putBoxConfigs).TotalAmount);
+        PriceResolutionService.ComputeOrderTotals(o.Lines, putBoxConfigs).TotalAmount);
     return Results.Ok(full.ToDetailDto(putOrderCount, putTotalAmount));
 }).AddEndpointFilterFactory(UserIdFilter);
 
@@ -453,8 +453,7 @@ app.MapDefaultEndpoints();
 app.MapProductEndpoints();
 app.MapCustomerPricingEndpoints();
 app.MapStandingOrderEndpoints();
-app.MapOrderInstanceEndpoints();
-app.MapFedExOrderEndpoints();
+app.MapOrderEndpoints();
 app.MapInvoiceEndpoints();
 app.MapCustomerKeyEndpoints();
 app.MapAdminEndpoints();

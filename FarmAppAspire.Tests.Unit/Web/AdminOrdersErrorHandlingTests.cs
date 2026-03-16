@@ -36,7 +36,7 @@ public class AdminOrdersErrorHandlingTests
     // ── Task 4.1: OperationCanceledException is NOT treated as a display error ──
 
     [Fact]
-    public async Task BrowseWeekInstancesAsync_CancellationToken_PropagatesCancellation()
+    public async Task BrowseWeekOrdersAsync_CancellationToken_PropagatesCancellation()
     {
         // WHEN the CancellationToken is cancelled the client throws OperationCanceledException.
         // The component should catch it silently — this test verifies the exception type.
@@ -51,11 +51,11 @@ public class AdminOrdersErrorHandlingTests
 
         // The call should throw OperationCanceledException (TaskCanceledException is a subclass).
         await Assert.ThrowsAnyAsync<OperationCanceledException>(
-            () => client.BrowseWeekInstancesAsync(DateTime.Today, cts.Token));
+            () => client.BrowseWeekOrdersAsync(DateTime.Today, cts.Token));
     }
 
     [Fact]
-    public async Task GenerateInstancesAsync_CancellationToken_PropagatesCancellation()
+    public async Task GenerateOrdersAsync_CancellationToken_PropagatesCancellation()
     {
         using var cts    = new CancellationTokenSource();
         var       client = BuildClient((_, ct) =>
@@ -67,7 +67,7 @@ public class AdminOrdersErrorHandlingTests
         await cts.CancelAsync();
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(
-            () => client.GenerateInstancesAsync(DateTime.Today, cts.Token));
+            () => client.GenerateOrdersAsync(DateTime.Today, cts.Token));
     }
 
     // Verifies that OperationCanceledException IS a subtype of OperationCanceledException
@@ -82,50 +82,47 @@ public class AdminOrdersErrorHandlingTests
     // ── Task 4.2: Browse error and generate error are independent fields ──────
 
     [Fact]
-    public async Task BrowseWeekInstancesAsync_HttpError_ThrowsHttpRequestException()
+    public async Task BrowseWeekOrdersAsync_HttpError_ThrowsHttpRequestException()
     {
         // WHEN the service returns 500, GetFromJsonAsync throws HttpRequestException.
         // The component catches this into _browseError without touching _generateError.
         var client = BuildClientThatReturns(HttpStatusCode.InternalServerError);
 
         await Assert.ThrowsAsync<HttpRequestException>(
-            () => client.BrowseWeekInstancesAsync(DateTime.Today));
+            () => client.BrowseWeekOrdersAsync(DateTime.Today));
     }
 
     [Fact]
-    public async Task GenerateInstancesAsync_HttpError_ReturnsNull()
+    public async Task GenerateOrdersAsync_HttpError_ReturnsNull()
     {
-        // WHEN the service returns non-success, GenerateInstancesAsync returns null.
-        // The component sets _generateError from the null check — browse data is unaffected.
+        // WHEN the service returns non-success, GenerateOrdersAsync returns null.
         var client = BuildClientThatReturns(HttpStatusCode.InternalServerError);
 
-        var result = await client.GenerateInstancesAsync(DateTime.Today);
+        var result = await client.GenerateOrdersAsync(DateTime.Today);
 
         Assert.Null(result);
     }
 
     [Fact]
-    public async Task BrowseWeekInstancesAsync_NetworkError_ThrowsHttpRequestException()
+    public async Task BrowseWeekOrdersAsync_NetworkError_ThrowsHttpRequestException()
     {
         // WHEN the network is unavailable the call throws — component catches into _browseError.
         var client = BuildClientThatThrows(new HttpRequestException("connection refused"));
 
         var ex = await Assert.ThrowsAsync<HttpRequestException>(
-            () => client.BrowseWeekInstancesAsync(DateTime.Today));
+            () => client.BrowseWeekOrdersAsync(DateTime.Today));
 
         Assert.Contains("connection refused", ex.Message);
     }
 
     [Fact]
-    public async Task GenerateInstancesAsync_NetworkError_ThrowsHttpRequestException()
+    public async Task GenerateOrdersAsync_NetworkError_ThrowsHttpRequestException()
     {
-        // WHEN the network is unavailable, GenerateInstancesAsync throws HttpRequestException.
-        // The component's GenerateAsync catch block catches it and sets _generateError,
-        // leaving browse data and _browseError completely unaffected (independent error fields).
+        // WHEN the network is unavailable, GenerateOrdersAsync throws HttpRequestException.
         var client = BuildClientThatThrows(new HttpRequestException("connection refused"));
 
         var ex = await Assert.ThrowsAsync<HttpRequestException>(
-            () => client.GenerateInstancesAsync(DateTime.Today));
+            () => client.GenerateOrdersAsync(DateTime.Today));
 
         Assert.Contains("connection refused", ex.Message);
     }
@@ -133,18 +130,18 @@ public class AdminOrdersErrorHandlingTests
     // ── Spec: Successful browse returns instance list ─────────────────────────
 
     [Fact]
-    public async Task BrowseWeekInstancesAsync_Success_ReturnsInstances()
+    public async Task BrowseWeekOrdersAsync_Success_ReturnsOrders()
     {
-        var weekOf    = new DateTime(2025, 4, 7);
-        var instances = new[]
+        var weekOf = new DateTime(2025, 4, 7);
+        var orders = new[]
         {
-            new WeekInstanceSummary(Guid.NewGuid(), Guid.NewGuid(), "Alpha Farm", "AF-001",
+            new WeekOrderSummary(Guid.NewGuid(), Guid.NewGuid(), "Alpha Farm", "AF-001",
                 "Insulated", "Pending", weekOf, false, 2, 120m)
         };
 
-        var client = BuildClientThatReturns(HttpStatusCode.OK, instances);
+        var client = BuildClientThatReturns(HttpStatusCode.OK, orders);
 
-        var result = await client.BrowseWeekInstancesAsync(weekOf);
+        var result = await client.BrowseWeekOrdersAsync(weekOf);
 
         Assert.Single(result);
         Assert.Equal("Alpha Farm", result[0].CustomerDisplayName);

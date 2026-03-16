@@ -88,6 +88,7 @@ else if (_allOrders is not null)
                 <thead>
                     <tr>
                         <th>@SortHeader("Customer", "Customer")</th>
+                        <th>Channel</th>
                         <th>@SortHeader("Status", "Status")</th>
                         <th>@SortHeader("Frequency", "Frequency")</th>
                         <th>@SortHeader("Start Week", "StartWeek")</th>
@@ -106,6 +107,7 @@ else if (_allOrders is not null)
                                 <div>@so.CustomerDisplayName</div>
                                 <small class="text-muted">@so.CustomerChannelType / @so.CustomerType</small>
                             </td>
+                            <td><span class="badge bg-info text-dark">@so.Channel</span></td>
                             <td>
                                 <span class="badge @StandingOrderRules.StatusBadgeClass(so.Status)">
                                     @so.Status

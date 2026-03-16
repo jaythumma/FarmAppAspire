@@ -8,6 +8,7 @@ public class StandingOrder
     public Guid? ContactId { get; set; }
     public CustomerContact? Contact { get; set; }
 
+    public OrderChannel Channel { get; set; }
     public StandingOrderStatus Status { get; set; } = StandingOrderStatus.Active;
     public OrderFrequency Frequency { get; set; } = OrderFrequency.Weekly;
     /// <summary>Used when Frequency = Monthly. Specifies which Monday of the month (1–4).</summary>
@@ -23,7 +24,7 @@ public class StandingOrder
 
     public ICollection<StandingOrderLine> Lines { get; set; } = [];
     public ICollection<StandingOrderSkip> Skips { get; set; } = [];
-    public ICollection<OrderInstance> Instances { get; set; } = [];
+    public ICollection<Order> Orders { get; set; } = [];
 }
 
 public class StandingOrderLine

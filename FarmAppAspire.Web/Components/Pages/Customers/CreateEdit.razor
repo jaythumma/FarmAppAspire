@@ -101,7 +101,11 @@
                 </div>
                 <div class="col-md-2 mb-3">
                     <label class="form-label">Country *</label>
-                    <InputText @bind-Value="_model.ShippingCountry" class="form-control" />
+                    <InputSelect @bind-Value="_model.ShippingCountry" class="form-select">
+                        <option value="">-- Select --</option>
+                        <option value="United States">United States</option>
+                        <option value="Canada">Canada</option>
+                    </InputSelect>
                     <ValidationMessage For="() => _model.ShippingCountry" />
                 </div>
             </div>
@@ -146,7 +150,11 @@
                     </div>
                     <div class="col-md-2 mb-3">
                         <label class="form-label">Country</label>
-                        <InputText @bind-Value="_model.BillingCountry" class="form-control" />
+                        <InputSelect @bind-Value="_model.BillingCountry" class="form-select">
+                            <option value="">-- Select --</option>
+                            <option value="United States">United States</option>
+                            <option value="Canada">Canada</option>
+                        </InputSelect>
                     </div>
                 </div>
             }

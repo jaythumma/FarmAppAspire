@@ -16,7 +16,7 @@ public class OrderListHelperTests
         int qty = 1,
         decimal amount = 100m) =>
         new(
-            Guid.NewGuid(), null, Guid.NewGuid(),
+            Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(),
             customerName, channelType, customerType,
             channel, status,
             weekOf ?? DateTime.Today,

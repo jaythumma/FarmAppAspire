@@ -139,30 +139,33 @@ public class SeasonRestartTests : IDisposable
         var customerId = await SeedCustomerAsync();
 
         // Simulate existing invoices for season 2024
-        var prevInstance = new OrderInstance
-        {
-            Id         = Guid.NewGuid(),
-            CustomerId = customerId,
-            Channel    = OrderChannel.Insulated,
-            Status     = OrderInstanceStatus.Shipped,
-            WeekOf     = SeasonYearService.FirstMondayOfJune(2024),
-            ShipDate   = SeasonYearService.FirstMondayOfJune(2024).AddDays(2),
-            IsSample   = false,
-            CreatedAt  = DateTime.UtcNow,
-            CreatedBy  = "test",
-            Lines      = []
-        };
-        _db.OrderInstances.Add(prevInstance);
-        _db.Invoices.Add(new Invoice
+        var so = await SeedActiveStandingOrderAsync(customerId, seasonYear: 2024);
+
+        var prevInstance = new Order
         {
             Id              = Guid.NewGuid(),
-            OrderInstanceId = prevInstance.Id,
+            StandingOrderId = so.Id,
             CustomerId      = customerId,
             Channel         = OrderChannel.Insulated,
-            SeasonYear      = 2024,
-            SeekNum         = 5,    // highest SeekNum in 2024
-            Label           = "TST-LOC-2024-05",
-            CreatedAt       = DateTime.UtcNow
+            Status          = OrderStatus.Shipped,
+            WeekOf          = SeasonYearService.FirstMondayOfJune(2024),
+            ShipDate        = SeasonYearService.FirstMondayOfJune(2024).AddDays(2),
+            IsSample        = false,
+            CreatedAt       = DateTime.UtcNow,
+            CreatedBy       = "test",
+            Lines           = []
+        };
+        _db.Orders.Add(prevInstance);
+        _db.Invoices.Add(new Invoice
+        {
+            Id        = Guid.NewGuid(),
+            OrderId   = prevInstance.Id,
+            CustomerId = customerId,
+            Channel   = OrderChannel.Insulated,
+            SeasonYear = 2024,
+            SeekNum   = 5,    // highest SeekNum in 2024
+            Label     = "TST-LOC-2024-05",
+            CreatedAt = DateTime.UtcNow
         });
         await _db.SaveChangesAsync();
 
