@@ -275,6 +275,20 @@ public class AdminUITests(AspirePlaywrightFixture fixture) : IAsyncLifetime
 
     // ── Admin Orders Page (/admin/orders) ─────────────────────────────────────
 
+    /// <summary>
+    /// Machine-checkable guarantee from fix-admin-orders-500:
+    /// navigating to /admin/orders must always return HTTP 200, never HTTP 500.
+    /// </summary>
+    [Fact]
+    public async Task AdminOrdersPage_Returns_Http200_NotHttp500()
+    {
+        await LoginAsAdminAsync();
+        var response = await _page.GotoAsync($"{fixture.BaseUrl}/admin/orders");
+
+        Assert.NotNull(response);
+        Assert.Equal(200, response.Status);
+    }
+
     [Fact]
     public async Task AdminOrdersPage_Loads_WithHeading()
     {
