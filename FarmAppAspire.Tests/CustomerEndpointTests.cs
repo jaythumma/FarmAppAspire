@@ -392,6 +392,32 @@ public class CustomerEndpointTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task PostCustomer_WithDirectChannel_AutoGeneratesCustomerKey()
+    {
+        var req = new CreateCustomerRequest(
+            CustomerType.Retail, "Sunrise",
+            CompanyName: null, TaxId: null, PaymentTerms: null,
+            PrimaryEmail: null, PrimaryPhone: null, Notes: null,
+            ShippingAddress: new AddressFields(
+                Line1: "1 Main St",
+                Line2: null,
+                City: "Dallas",
+                State: "TX",
+                PostalCode: "75201",
+                Country: "US"),
+            ChannelType: ChannelType.Direct);
+
+        var response = await _client!.PostAsJsonAsync("/customers", req, JsonOptions);
+        response.EnsureSuccessStatusCode();
+        var created = await response.Content.ReadFromJsonAsync<CustomerDetailDto>(JsonOptions);
+
+        Assert.NotNull(created);
+        Assert.Equal("SUN-DAL-TX", created.CustomerKey);
+        Assert.False(created.CustomerKeyCollision);
+        Assert.Equal(ChannelType.Direct, created.ChannelType);
+    }
+
+    [Fact]
     public async Task PostCustomer_WithChannelTypeAmazon_AutoGeneratesCustomerKey()
     {
         var name = $"AmazonKey-{Guid.NewGuid():N}";
