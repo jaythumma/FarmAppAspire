@@ -1,6 +1,5 @@
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Configuration;
 
 namespace FarmAppAspire.Web.Data;
 
@@ -12,14 +11,22 @@ public class IdentitySeeder(IServiceScopeFactory scopeFactory, ILogger<IdentityS
     {
         await using var scope = scopeFactory.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-        await db.Database.MigrateAsync(cancellationToken);
+
+        var pendingMigrations = await db.Database.GetPendingMigrationsAsync(cancellationToken);
+        if (pendingMigrations.Any())
+        {
+            logger.LogInformation("Applying {Count} pending migrations...", pendingMigrations.Count());
+            await db.Database.MigrateAsync(cancellationToken);
+        }
+        else
+        {
+            logger.LogInformation("Database is up to date; no migrations to apply.");
+        }
 
         var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole>>();
         foreach (var role in Roles)
-        {
             if (!await roleManager.RoleExistsAsync(role))
                 await roleManager.CreateAsync(new IdentityRole(role));
-        }
 
         var config = scope.ServiceProvider.GetRequiredService<IConfiguration>();
         var email = config["FarmAdmin:Email"];
@@ -66,5 +73,8 @@ public class IdentitySeeder(IServiceScopeFactory scopeFactory, ILogger<IdentityS
         }
     }
 
-    public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+    public Task StopAsync(CancellationToken cancellationToken)
+    {
+        return Task.CompletedTask;
+    }
 }
