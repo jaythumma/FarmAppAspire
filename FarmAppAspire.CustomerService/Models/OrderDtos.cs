@@ -10,6 +10,14 @@ public record CreateCustomerPricingRequest(InsulatedBoxSize BoxSize, decimal Pri
 public record UpdateCustomerPricingRequest(decimal PricePerLb, decimal? ShippingRate, int MinQty);
 
 // ── Standing order DTOs ───────────────────────────────────────────────────────
+public record AllStandingOrderDto(
+    Guid Id, Guid CustomerId, string CustomerDisplayName,
+    ChannelType CustomerChannelType, CustomerType CustomerType,
+    StandingOrderStatus Status, OrderFrequency Frequency, MonthlyWeek? MonthlyWeek,
+    bool IsSample, int SeasonYear, DateTime StartWeek,
+    int TotalBoxes, decimal TotalWeightLbs, decimal TotalAmount,
+    DateTime CreatedAt, string CreatedBy);
+
 public record StandingOrderLineDto(Guid Id, InsulatedBoxSize BoxSize, int Qty);
 public record StandingOrderLineRequest(InsulatedBoxSize BoxSize, int Qty);
 public record StandingOrderSkipDto(Guid Id, DateTime WeekOf);

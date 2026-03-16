@@ -85,6 +85,14 @@ public class OrderApiClient(HttpClient httpClient)
 
     // ── Standing order management ─────────────────────────────────────────────
 
+    public async Task<AllStandingOrderSummary[]> GetAllStandingOrdersAsync(
+        CancellationToken cancellationToken = default)
+    {
+        var result = await httpClient.GetFromJsonAsync<IEnumerable<AllStandingOrderSummary>>(
+            "/standing-orders", JsonOptions, cancellationToken);
+        return result?.ToArray() ?? [];
+    }
+
     public async Task<StandingOrderDetail[]> GetStandingOrdersAsync(
         Guid customerId, CancellationToken cancellationToken = default)
     {
@@ -215,6 +223,13 @@ public record InspectOrderRequest(DateTime InspectionDate);
 
 public record StandingOrderLineDetail(Guid Id, string BoxSize, int Qty);
 public record StandingOrderSkipDetail(Guid Id, DateTime WeekOf);
+public record AllStandingOrderSummary(
+    Guid Id, Guid CustomerId, string CustomerDisplayName,
+    ChannelType CustomerChannelType, CustomerType CustomerType,
+    string Status, string Frequency, string? MonthlyWeek,
+    bool IsSample, int SeasonYear, DateTime StartWeek,
+    int TotalBoxes, decimal TotalWeightLbs, decimal TotalAmount,
+    DateTime CreatedAt, string CreatedBy);
 public record StandingOrderDetail(
     Guid Id, Guid CustomerId, Guid? ContactId,
     string Status, string Frequency, string? MonthlyWeek,
