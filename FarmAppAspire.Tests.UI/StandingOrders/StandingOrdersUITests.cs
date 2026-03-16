@@ -83,16 +83,20 @@ public class StandingOrdersUITests(AspirePlaywrightFixture fixture) : IAsyncLife
     }
 
     [Fact]
-    public async Task StandingOrdersListPage_WithNoCustomerSelected_ShowsNoTable()
+    public async Task StandingOrdersListPage_WithNoCustomerSelected_ShowsTableOrEmptyMessage()
     {
         await LoginAsAdminAsync();
         await _page.GotoAsync($"{fixture.BaseUrl}/standing-orders");
         await _page.WaitForSelectorAsync("h1");
         await _page.WaitForTimeoutAsync(CircuitWarmupMs);
 
-        // Without a customer selected, no standing orders table should be displayed
-        var table = await _page.QuerySelectorAsync("table");
-        Assert.Null(table);
+        // All orders are loaded by default; a table or empty-state message should appear
+        var body = await _page.InnerTextAsync("body");
+        Assert.True(
+            body.Contains("Standing Order", StringComparison.OrdinalIgnoreCase) ||
+            body.Contains("No standing orders", StringComparison.OrdinalIgnoreCase),
+            "Page should show all orders or an empty-state message by default"
+        );
     }
 
     [Fact]

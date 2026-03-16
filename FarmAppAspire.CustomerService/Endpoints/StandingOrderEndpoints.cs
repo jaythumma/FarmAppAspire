@@ -9,6 +9,47 @@ public static class StandingOrderEndpoints
 {
     public static IEndpointRouteBuilder MapStandingOrderEndpoints(this IEndpointRouteBuilder app)
     {
+        // GET /standing-orders — returns all standing orders across all customers
+        app.MapGet("/standing-orders", async (CustomerDbContext db) =>
+        {
+            var orders = await db.StandingOrders
+                .Include(s => s.Lines)
+                .Include(s => s.Skips)
+                .ToListAsync();
+
+            var customerIds = orders.Select(o => o.CustomerId).Distinct().ToList();
+            var customers = await db.Customers
+                .Where(c => customerIds.Contains(c.Id))
+                .ToDictionaryAsync(c => c.Id);
+
+            var boxConfigs = await db.InsulatedBoxConfigs.ToListAsync();
+            var allPricings = await db.CustomerPricings
+                .Where(p => customerIds.Contains(p.CustomerId))
+                .ToListAsync();
+
+            var pricingsByCustomer = allPricings
+                .GroupBy(p => p.CustomerId)
+                .ToDictionary(g => g.Key, g => g.ToList());
+
+            return Results.Ok(orders.Select(s =>
+            {
+                customers.TryGetValue(s.CustomerId, out var customer);
+                var overrides = pricingsByCustomer.GetValueOrDefault(s.CustomerId, []);
+                var (totalBoxes, totalWeight, totalAmount) =
+                    PriceResolutionService.ComputeStandingOrderTotals(s.Lines, boxConfigs, overrides);
+
+                return new AllStandingOrderDto(
+                    s.Id, s.CustomerId,
+                    customer?.DisplayName ?? s.CustomerId.ToString(),
+                    customer?.ChannelType ?? ChannelType.Direct,
+                    customer?.Type ?? CustomerType.Retail,
+                    s.Status, s.Frequency, s.MonthlyWeek,
+                    s.IsSample, s.SeasonYear, s.StartWeek,
+                    totalBoxes, totalWeight, totalAmount,
+                    s.CreatedAt, s.CreatedBy);
+            }));
+        }).Produces<IEnumerable<AllStandingOrderDto>>().WithTags("StandingOrders");
+
         var g = app.MapGroup("/customers/{customerId:guid}/standing-orders").WithTags("StandingOrders");
 
         g.MapGet("/", async (Guid customerId, CustomerDbContext db) =>
