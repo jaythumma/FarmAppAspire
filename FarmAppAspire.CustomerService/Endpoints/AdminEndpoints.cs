@@ -11,8 +11,9 @@ public static class AdminEndpoints
     {
         var g = app.MapGroup("/admin").WithTags("Admin");
 
-        // ── Manual instance generation trigger ────────────────────────────────
-        g.MapPost("/generate-instances", async (GenerateInstancesRequest req, CustomerDbContext db, HttpContext ctx) =>
+        // ── Manual order generation trigger ───────────────────────────────────
+        /// <remarks>Only generates orders for Insulated standing orders. FedEx standing orders are on-demand and excluded.</remarks>
+        g.MapPost("/generate-orders", async (GenerateOrdersRequest req, CustomerDbContext db, HttpContext ctx) =>
         {
             var userId     = ctx.Request.Headers["X-User-Id"].FirstOrDefault() ?? "system";
             var weekOf     = SeasonYearService.MondayOf(req.ForWeek);
@@ -21,7 +22,8 @@ public static class AdminEndpoints
             var activeOrders = await db.StandingOrders
                 .Include(s => s.Lines)
                 .Include(s => s.Skips)
-                .Where(s => s.Status == StandingOrderStatus.Active
+                .Where(s => s.Channel == OrderChannel.Insulated  // FedEx SOs are always on-demand; exclude from bulk generate
+                         && s.Status == StandingOrderStatus.Active
                          && s.Frequency != OrderFrequency.Stopped
                          && s.SeasonYear <= seasonYear)
                 .ToListAsync();
@@ -34,14 +36,14 @@ public static class AdminEndpoints
                 .ToListAsync();
             var customerMap     = customers.ToDictionary(c => c.Id);
 
-            var created  = 0;
-            var skipped  = 0;
-            var createdInstances = new List<(OrderInstance Instance, OrderFrequency Frequency)>();
+            var created       = 0;
+            var skipped       = 0;
+            var createdOrders = new List<(Order Order, OrderFrequency Frequency)>();
 
             foreach (var so in activeOrders)
             {
-                // Idempotency: skip if instance already exists
-                if (await db.OrderInstances.AnyAsync(i =>
+                // Idempotency: skip if order already exists for this week
+                if (await db.Orders.AnyAsync(i =>
                         i.StandingOrderId == so.Id && i.WeekOf.Date == weekOf.Date))
                 {
                     skipped++;
@@ -58,14 +60,14 @@ public static class AdminEndpoints
                 var pricingOverrides = await db.CustomerPricings
                     .Where(p => p.CustomerId == so.CustomerId).ToListAsync();
 
-                var instance = new OrderInstance
+                var order = new Order
                 {
                     Id              = Guid.NewGuid(),
                     StandingOrderId = so.Id,
                     CustomerId      = so.CustomerId,
                     ContactId       = so.ContactId,
                     Channel         = OrderChannel.Insulated,
-                    Status          = OrderInstanceStatus.Pending,
+                    Status          = OrderStatus.Pending,
                     WeekOf          = weekOf,
                     IsSample        = so.IsSample,
                     CreatedAt       = DateTime.UtcNow,
@@ -73,7 +75,7 @@ public static class AdminEndpoints
                     Lines           = so.Lines.Select(l =>
                     {
                         var pricePerLb = PriceResolutionService.ResolveEffectivePricePerLb(l.BoxSize, l.Qty, pricingOverrides);
-                        return new OrderInstanceLine
+                        return new OrderLine
                         {
                             Id                  = Guid.NewGuid(),
                             BoxSize             = l.BoxSize,
@@ -83,8 +85,8 @@ public static class AdminEndpoints
                     }).ToList()
                 };
 
-                db.OrderInstances.Add(instance);
-                createdInstances.Add((instance, so.Frequency));
+                db.Orders.Add(order);
+                createdOrders.Add((order, so.Frequency));
 
                 // OnRequest: generate then auto-pause
                 if (so.Frequency == OrderFrequency.OnRequest)
@@ -95,60 +97,60 @@ public static class AdminEndpoints
 
             await db.SaveChangesAsync();
 
-            var summaries = createdInstances.Select(t =>
+            var summaries = createdOrders.Select(t =>
             {
-                var inst  = t.Instance;
-                var cust  = customerMap.GetValueOrDefault(inst.CustomerId);
-                var (qty, amount) = PriceResolutionService.ComputeOrderInstanceTotals(inst.Lines, boxConfigs);
-                return new GeneratedInstanceSummary(
-                    inst.Id,
-                    inst.CustomerId,
+                var o    = t.Order;
+                var cust = customerMap.GetValueOrDefault(o.CustomerId);
+                var (qty, amount) = PriceResolutionService.ComputeOrderTotals(o.Lines, boxConfigs);
+                return new GeneratedOrderSummary(
+                    o.Id,
+                    o.CustomerId,
                     cust?.DisplayName ?? "Unknown",
                     cust?.CustomerKey,
-                    inst.Channel.ToString(),
-                    inst.WeekOf,
-                    inst.IsSample,
+                    o.Channel.ToString(),
+                    o.WeekOf,
+                    o.IsSample,
                     qty,
                     amount);
             }).OrderBy(s => s.CustomerDisplayName).ToList();
 
-            return Results.Ok(new GenerateInstancesResponse(created, skipped, weekOf, summaries));
-        }).Produces<GenerateInstancesResponse>();
+            return Results.Ok(new GenerateOrdersResponse(created, skipped, weekOf, summaries));
+        }).Produces<GenerateOrdersResponse>();
 
-        // ── Browse instances for a given week ─────────────────────────────────
-        g.MapGet("/instances", async (CustomerDbContext db, DateTime? weekOf = null) =>
+        // ── Browse orders for a given week ─────────────────────────────────────
+        g.MapGet("/orders", async (CustomerDbContext db, DateTime? weekOf = null) =>
         {
             var week = SeasonYearService.MondayOf(weekOf ?? DateTime.UtcNow);
 
             try
             {
-                var instances = await db.OrderInstances
+                var orders = await db.Orders
                     .Include(i => i.Lines)
                     .Where(i => i.WeekOf.Date == week.Date)
                     .OrderBy(i => i.CustomerId)
                     .ToListAsync();
 
                 var boxConfigs  = await db.InsulatedBoxConfigs.ToListAsync();
-                var customerIds = instances.Select(i => i.CustomerId).Distinct().ToList();
+                var customerIds = orders.Select(i => i.CustomerId).Distinct().ToList();
                 var customers   = await db.Customers
                     .Where(c => customerIds.Contains(c.Id))
                     .Select(c => new { c.Id, c.DisplayName, c.CustomerKey })
                     .ToListAsync();
                 var customerMap = customers.ToDictionary(c => c.Id);
 
-                var result = instances.Select(i =>
+                var result = orders.Select(o =>
                 {
-                    var cust  = customerMap.GetValueOrDefault(i.CustomerId);
-                    var (qty, amount) = PriceResolutionService.ComputeOrderInstanceTotals(i.Lines, boxConfigs);
-                    return new WeekInstanceSummary(
-                        i.Id,
-                        i.CustomerId,
+                    var cust  = customerMap.GetValueOrDefault(o.CustomerId);
+                    var (qty, amount) = PriceResolutionService.ComputeOrderTotals(o.Lines, boxConfigs);
+                    return new WeekOrderSummary(
+                        o.Id,
+                        o.CustomerId,
                         cust?.DisplayName ?? "Unknown",
                         cust?.CustomerKey,
-                        i.Channel.ToString(),
-                        i.Status.ToString(),
-                        i.WeekOf,
-                        i.IsSample,
+                        o.Channel.ToString(),
+                        o.Status.ToString(),
+                        o.WeekOf,
+                        o.IsSample,
                         qty,
                         amount);
                 }).ToList();
@@ -159,7 +161,7 @@ public static class AdminEndpoints
             {
                 return Results.Problem(ex.Message, statusCode: StatusCodes.Status500InternalServerError);
             }
-        }).Produces<IEnumerable<WeekInstanceSummary>>();
+        }).Produces<IEnumerable<WeekOrderSummary>>();
 
 
         // ── Season management ─────────────────────────────────────────────────

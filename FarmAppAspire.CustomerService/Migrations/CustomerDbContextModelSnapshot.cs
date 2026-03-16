@@ -336,7 +336,7 @@ namespace FarmAppAspire.CustomerService.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
-                    b.Property<Guid>("OrderInstanceId")
+                    b.Property<Guid>("OrderId")
                         .HasColumnType("uuid");
 
                     b.Property<int>("SeasonYear")
@@ -350,7 +350,7 @@ namespace FarmAppAspire.CustomerService.Migrations
                     b.HasIndex("Label")
                         .IsUnique();
 
-                    b.HasIndex("OrderInstanceId")
+                    b.HasIndex("OrderId")
                         .IsUnique();
 
                     b.HasIndex("CustomerId", "SeasonYear", "Channel", "SeekNum")
@@ -359,7 +359,7 @@ namespace FarmAppAspire.CustomerService.Migrations
                     b.ToTable("Invoices");
                 });
 
-            modelBuilder.Entity("FarmAppAspire.CustomerService.Models.OrderInstance", b =>
+            modelBuilder.Entity("FarmAppAspire.CustomerService.Models.Order", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
@@ -394,7 +394,7 @@ namespace FarmAppAspire.CustomerService.Migrations
                     b.Property<DateTime?>("ShipDate")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<Guid?>("StandingOrderId")
+                    b.Property<Guid>("StandingOrderId")
                         .HasColumnType("uuid");
 
                     b.Property<string>("Status")
@@ -412,10 +412,10 @@ namespace FarmAppAspire.CustomerService.Migrations
 
                     b.HasIndex("CustomerId", "WeekOf", "Status");
 
-                    b.ToTable("OrderInstances");
+                    b.ToTable("Orders");
                 });
 
-            modelBuilder.Entity("FarmAppAspire.CustomerService.Models.OrderInstanceLine", b =>
+            modelBuilder.Entity("FarmAppAspire.CustomerService.Models.OrderLine", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
@@ -433,7 +433,7 @@ namespace FarmAppAspire.CustomerService.Migrations
                     b.Property<string>("FedExTierSize")
                         .HasColumnType("text");
 
-                    b.Property<Guid>("OrderInstanceId")
+                    b.Property<Guid>("OrderId")
                         .HasColumnType("uuid");
 
                     b.Property<string>("PackagingType")
@@ -444,9 +444,9 @@ namespace FarmAppAspire.CustomerService.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("OrderInstanceId");
+                    b.HasIndex("OrderId");
 
-                    b.ToTable("OrderInstanceLines");
+                    b.ToTable("OrderLines");
                 });
 
             modelBuilder.Entity("FarmAppAspire.CustomerService.Models.StandingOrder", b =>
@@ -454,6 +454,10 @@ namespace FarmAppAspire.CustomerService.Migrations
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
+
+                    b.Property<string>("Channel")
+                        .IsRequired()
+                        .HasColumnType("text");
 
                     b.Property<Guid?>("ContactId")
                         .HasColumnType("uuid");
@@ -497,6 +501,9 @@ namespace FarmAppAspire.CustomerService.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("ContactId");
+
+                    b.HasIndex("CustomerId", "Channel")
+                        .IsUnique();
 
                     b.HasIndex("CustomerId", "Status");
 
@@ -590,18 +597,18 @@ namespace FarmAppAspire.CustomerService.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.HasOne("FarmAppAspire.CustomerService.Models.OrderInstance", "OrderInstance")
+                    b.HasOne("FarmAppAspire.CustomerService.Models.Order", "Order")
                         .WithOne("Invoice")
-                        .HasForeignKey("FarmAppAspire.CustomerService.Models.Invoice", "OrderInstanceId")
+                        .HasForeignKey("FarmAppAspire.CustomerService.Models.Invoice", "OrderId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
                     b.Navigation("Customer");
 
-                    b.Navigation("OrderInstance");
+                    b.Navigation("Order");
                 });
 
-            modelBuilder.Entity("FarmAppAspire.CustomerService.Models.OrderInstance", b =>
+            modelBuilder.Entity("FarmAppAspire.CustomerService.Models.Order", b =>
                 {
                     b.HasOne("FarmAppAspire.CustomerService.Models.CustomerContact", "Contact")
                         .WithMany()
@@ -614,9 +621,10 @@ namespace FarmAppAspire.CustomerService.Migrations
                         .IsRequired();
 
                     b.HasOne("FarmAppAspire.CustomerService.Models.StandingOrder", "StandingOrder")
-                        .WithMany("Instances")
+                        .WithMany("Orders")
                         .HasForeignKey("StandingOrderId")
-                        .OnDelete(DeleteBehavior.SetNull);
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
 
                     b.Navigation("Contact");
 
@@ -625,15 +633,15 @@ namespace FarmAppAspire.CustomerService.Migrations
                     b.Navigation("StandingOrder");
                 });
 
-            modelBuilder.Entity("FarmAppAspire.CustomerService.Models.OrderInstanceLine", b =>
+            modelBuilder.Entity("FarmAppAspire.CustomerService.Models.OrderLine", b =>
                 {
-                    b.HasOne("FarmAppAspire.CustomerService.Models.OrderInstance", "OrderInstance")
+                    b.HasOne("FarmAppAspire.CustomerService.Models.Order", "Order")
                         .WithMany("Lines")
-                        .HasForeignKey("OrderInstanceId")
+                        .HasForeignKey("OrderId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.Navigation("OrderInstance");
+                    b.Navigation("Order");
                 });
 
             modelBuilder.Entity("FarmAppAspire.CustomerService.Models.StandingOrder", b =>
@@ -682,7 +690,7 @@ namespace FarmAppAspire.CustomerService.Migrations
                     b.Navigation("Contacts");
                 });
 
-            modelBuilder.Entity("FarmAppAspire.CustomerService.Models.OrderInstance", b =>
+            modelBuilder.Entity("FarmAppAspire.CustomerService.Models.Order", b =>
                 {
                     b.Navigation("Invoice");
 
@@ -691,9 +699,9 @@ namespace FarmAppAspire.CustomerService.Migrations
 
             modelBuilder.Entity("FarmAppAspire.CustomerService.Models.StandingOrder", b =>
                 {
-                    b.Navigation("Instances");
-
                     b.Navigation("Lines");
+
+                    b.Navigation("Orders");
 
                     b.Navigation("Skips");
                 });

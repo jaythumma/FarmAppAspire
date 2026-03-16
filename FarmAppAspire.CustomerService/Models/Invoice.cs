@@ -3,8 +3,8 @@ namespace FarmAppAspire.CustomerService.Models;
 public class Invoice
 {
     public Guid Id { get; set; }
-    public Guid OrderInstanceId { get; set; }
-    public OrderInstance OrderInstance { get; set; } = null!;
+    public Guid OrderId { get; set; }
+    public Order Order { get; set; } = null!;
     public Guid CustomerId { get; set; }
     public Customer Customer { get; set; } = null!;
     public OrderChannel Channel { get; set; }

@@ -39,13 +39,13 @@ public static class PriceResolutionService
         return (totalBoxes, totalWeight, totalAmount);
     }
 
-    /// <summary>Computes aggregated totals for an order instance's lines.</summary>
+    /// <summary>Computes aggregated totals for an order's lines.</summary>
     /// <remarks>
     /// FedEx lines use <c>FedExFixedPrice × Qty</c>.
     /// Insulated lines use <c>EffectivePricePerLb × WeightLbs × Qty</c> (weight from <paramref name="boxConfigs"/>).
     /// </remarks>
-    public static (int TotalQty, decimal TotalAmount) ComputeOrderInstanceTotals(
-        IEnumerable<OrderInstanceLine> lines,
+    public static (int TotalQty, decimal TotalAmount) ComputeOrderTotals(
+        IEnumerable<OrderLine> lines,
         IEnumerable<InsulatedBoxConfig> boxConfigs)
     {
         var configMap = boxConfigs.ToDictionary(c => c.Size);

@@ -28,6 +28,9 @@ public class InvoiceCreationTests : IDisposable
 
     // ── Helpers ───────────────────────────────────────────────────────────────
 
+    private Guid _insulatedSoId;
+    private Guid _fedExSoId;
+
     private async Task<Customer> SeedCustomerAsync(string key = "MAN-CHI-IL")
     {
         var customer = new Customer
@@ -40,23 +43,43 @@ public class InvoiceCreationTests : IDisposable
             CreatedBy   = "test"
         };
         _db.Customers.Add(customer);
+
+        var insulatedSo = new StandingOrder
+        {
+            Id = Guid.NewGuid(), CustomerId = customer.Id, Channel = OrderChannel.Insulated,
+            Frequency = OrderFrequency.Weekly, Status = StandingOrderStatus.Active,
+            SeasonYear = 2024, StartWeek = new DateTime(2024, 6, 3),
+            CreatedAt = DateTime.UtcNow, CreatedBy = "test"
+        };
+        var fedExSo = new StandingOrder
+        {
+            Id = Guid.NewGuid(), CustomerId = customer.Id, Channel = OrderChannel.FedEx,
+            Frequency = OrderFrequency.OnRequest, Status = StandingOrderStatus.Active,
+            SeasonYear = 2024, StartWeek = new DateTime(2024, 6, 3),
+            CreatedAt = DateTime.UtcNow, CreatedBy = "test"
+        };
+        _db.StandingOrders.AddRange(insulatedSo, fedExSo);
         await _db.SaveChangesAsync();
+
+        _insulatedSoId = insulatedSo.Id;
+        _fedExSoId     = fedExSo.Id;
         return customer;
     }
 
-    private static OrderInstance BuildInstance(Guid customerId, OrderChannel channel,
+    private Order BuildInstance(Guid customerId, OrderChannel channel,
         bool isSample = false, DateTime? shipDate = null) => new()
     {
-        Id         = Guid.NewGuid(),
-        CustomerId = customerId,
-        Channel    = channel,
-        Status     = OrderInstanceStatus.Shipped,
-        WeekOf     = new DateTime(2024, 6, 3),
-        ShipDate   = shipDate ?? new DateTime(2024, 6, 5),
-        IsSample   = isSample,
-        CreatedAt  = DateTime.UtcNow,
-        CreatedBy  = "test",
-        Lines      = []
+        Id              = Guid.NewGuid(),
+        StandingOrderId = channel == OrderChannel.FedEx ? _fedExSoId : _insulatedSoId,
+        CustomerId      = customerId,
+        Channel         = channel,
+        Status          = OrderStatus.Shipped,
+        WeekOf          = new DateTime(2024, 6, 3),
+        ShipDate        = shipDate ?? new DateTime(2024, 6, 5),
+        IsSample        = isSample,
+        CreatedAt       = DateTime.UtcNow,
+        CreatedBy       = "test",
+        Lines           = []
     };
 
     // ── Scenario: First insulated invoice of a season is labeled correctly ───
@@ -66,10 +89,10 @@ public class InvoiceCreationTests : IDisposable
     {
         var customer = await SeedCustomerAsync("MAN-CHI-IL");
         var instance = BuildInstance(customer.Id, OrderChannel.Insulated, shipDate: new DateTime(2024, 6, 5));
-        _db.OrderInstances.Add(instance);
+        _db.Orders.Add(instance);
         await _db.SaveChangesAsync();
 
-        await OrderInstanceEndpoints.CreateInvoiceAsync(instance, _db);
+        await OrderEndpoints.CreateInvoiceAsync(instance, _db);
         await _db.SaveChangesAsync();
 
         var invoice = await _db.Invoices.FirstAsync(i => i.CustomerId == customer.Id);
@@ -89,9 +112,9 @@ public class InvoiceCreationTests : IDisposable
         for (var i = 0; i < 3; i++)
         {
             var instance = BuildInstance(customer.Id, OrderChannel.Insulated);
-            _db.OrderInstances.Add(instance);
+            _db.Orders.Add(instance);
             await _db.SaveChangesAsync();
-            await OrderInstanceEndpoints.CreateInvoiceAsync(instance, _db);
+            await OrderEndpoints.CreateInvoiceAsync(instance, _db);
             await _db.SaveChangesAsync();
         }
 
@@ -116,17 +139,17 @@ public class InvoiceCreationTests : IDisposable
         for (var i = 0; i < 6; i++)
         {
             var instance = BuildInstance(customer.Id, OrderChannel.Insulated, shipDate: shipDate2023);
-            _db.OrderInstances.Add(instance);
+            _db.Orders.Add(instance);
             await _db.SaveChangesAsync();
-            await OrderInstanceEndpoints.CreateInvoiceAsync(instance, _db);
+            await OrderEndpoints.CreateInvoiceAsync(instance, _db);
             await _db.SaveChangesAsync();
         }
 
         // 7th invoice
         var seventhInstance = BuildInstance(customer.Id, OrderChannel.Insulated, shipDate: shipDate2023);
-        _db.OrderInstances.Add(seventhInstance);
+        _db.Orders.Add(seventhInstance);
         await _db.SaveChangesAsync();
-        await OrderInstanceEndpoints.CreateInvoiceAsync(seventhInstance, _db);
+        await OrderEndpoints.CreateInvoiceAsync(seventhInstance, _db);
         await _db.SaveChangesAsync();
 
         var seventh = await _db.Invoices
@@ -149,9 +172,9 @@ public class InvoiceCreationTests : IDisposable
         for (var i = 0; i < 5; i++)
         {
             var inst = BuildInstance(customer.Id, OrderChannel.Insulated);
-            _db.OrderInstances.Add(inst);
+            _db.Orders.Add(inst);
             await _db.SaveChangesAsync();
-            await OrderInstanceEndpoints.CreateInvoiceAsync(inst, _db);
+            await OrderEndpoints.CreateInvoiceAsync(inst, _db);
             await _db.SaveChangesAsync();
         }
 
@@ -159,9 +182,9 @@ public class InvoiceCreationTests : IDisposable
         for (var i = 0; i < 3; i++)
         {
             var inst = BuildInstance(customer.Id, OrderChannel.FedEx);
-            _db.OrderInstances.Add(inst);
+            _db.Orders.Add(inst);
             await _db.SaveChangesAsync();
-            await OrderInstanceEndpoints.CreateInvoiceAsync(inst, _db);
+            await OrderEndpoints.CreateInvoiceAsync(inst, _db);
             await _db.SaveChangesAsync();
         }
 
@@ -184,13 +207,13 @@ public class InvoiceCreationTests : IDisposable
         // The ship endpoint guards against samples; CreateInvoiceAsync is never called for them.
         // We verify the guard by checking no invoice exists after a sample instance ships.
         var sampleInstance = BuildInstance(customer.Id, OrderChannel.Insulated, isSample: true);
-        _db.OrderInstances.Add(sampleInstance);
+        _db.Orders.Add(sampleInstance);
         await _db.SaveChangesAsync();
 
         // Simulate the ship endpoint logic: only call CreateInvoiceAsync when !IsSample
         if (!sampleInstance.IsSample)
         {
-            await OrderInstanceEndpoints.CreateInvoiceAsync(sampleInstance, _db);
+            await OrderEndpoints.CreateInvoiceAsync(sampleInstance, _db);
             await _db.SaveChangesAsync();
         }
 
@@ -207,18 +230,18 @@ public class InvoiceCreationTests : IDisposable
 
         // One real invoice -> SeekNum=1
         var realInstance = BuildInstance(customer.Id, OrderChannel.Insulated);
-        _db.OrderInstances.Add(realInstance);
+        _db.Orders.Add(realInstance);
         await _db.SaveChangesAsync();
-        await OrderInstanceEndpoints.CreateInvoiceAsync(realInstance, _db);
+        await OrderEndpoints.CreateInvoiceAsync(realInstance, _db);
         await _db.SaveChangesAsync();
 
         // Sample shipment -> no invoice created, SeekNum must remain at 1
         var sampleInstance = BuildInstance(customer.Id, OrderChannel.Insulated, isSample: true);
-        _db.OrderInstances.Add(sampleInstance);
+        _db.Orders.Add(sampleInstance);
         await _db.SaveChangesAsync();
         if (!sampleInstance.IsSample)
         {
-            await OrderInstanceEndpoints.CreateInvoiceAsync(sampleInstance, _db);
+            await OrderEndpoints.CreateInvoiceAsync(sampleInstance, _db);
             await _db.SaveChangesAsync();
         }
 
@@ -240,17 +263,17 @@ public class InvoiceCreationTests : IDisposable
         for (var i = 0; i < 3; i++)
         {
             var inst = BuildInstance(customer.Id, OrderChannel.Insulated, shipDate: new DateTime(2024, 7, 1));
-            _db.OrderInstances.Add(inst);
+            _db.Orders.Add(inst);
             await _db.SaveChangesAsync();
-            await OrderInstanceEndpoints.CreateInvoiceAsync(inst, _db);
+            await OrderEndpoints.CreateInvoiceAsync(inst, _db);
             await _db.SaveChangesAsync();
         }
 
         // Season 2025 (July 2025): SeekNum should start at 1 again
         var inst2025 = BuildInstance(customer.Id, OrderChannel.Insulated, shipDate: new DateTime(2025, 7, 1));
-        _db.OrderInstances.Add(inst2025);
+        _db.Orders.Add(inst2025);
         await _db.SaveChangesAsync();
-        await OrderInstanceEndpoints.CreateInvoiceAsync(inst2025, _db);
+        await OrderEndpoints.CreateInvoiceAsync(inst2025, _db);
         await _db.SaveChangesAsync();
 
         var invoice2025 = await _db.Invoices
@@ -269,10 +292,10 @@ public class InvoiceCreationTests : IDisposable
     {
         var customer = await SeedCustomerAsync();
         var instance = BuildInstance(customer.Id, OrderChannel.Insulated, shipDate: new DateTime(year, month, day));
-        _db.OrderInstances.Add(instance);
+        _db.Orders.Add(instance);
         await _db.SaveChangesAsync();
 
-        await OrderInstanceEndpoints.CreateInvoiceAsync(instance, _db);
+        await OrderEndpoints.CreateInvoiceAsync(instance, _db);
         await _db.SaveChangesAsync();
 
         var invoice = await _db.Invoices.FirstAsync(i => i.CustomerId == customer.Id);
@@ -286,10 +309,10 @@ public class InvoiceCreationTests : IDisposable
     {
         var customer = await SeedCustomerAsync("GVF-AUS-TX");
         var instance = BuildInstance(customer.Id, OrderChannel.Insulated);
-        _db.OrderInstances.Add(instance);
+        _db.Orders.Add(instance);
         await _db.SaveChangesAsync();
 
-        await OrderInstanceEndpoints.CreateInvoiceAsync(instance, _db);
+        await OrderEndpoints.CreateInvoiceAsync(instance, _db);
         await _db.SaveChangesAsync();
 
         var invoice = await _db.Invoices.FirstAsync();

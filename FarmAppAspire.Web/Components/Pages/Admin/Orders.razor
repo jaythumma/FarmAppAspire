@@ -4,14 +4,14 @@
 @inject OrderApiClient OrderApi
 @implements IDisposable
 
-<PageTitle>Order Instance Administration</PageTitle>
+<PageTitle>Order Administration</PageTitle>
 
-<h1>Order Instance Administration</h1>
-<p class="text-muted mb-4">Generate weekly order instances from active standing orders, or browse existing instances by week.</p>
+<h1>Order Administration</h1>
+<p class="text-muted mb-4">Generate weekly orders from active standing orders, or browse existing orders by week.</p>
 
 @* ── Generate Instances ──────────────────────────────────────────────────── *@
 <div class="card mb-4">
-    <div class="card-header"><h5 class="mb-0">Generate Instances</h5></div>
+    <div class="card-header"><h5 class="mb-0">Generate Orders</h5></div>
     <div class="card-body">
         <div class="row g-3 align-items-end">
             <div class="col-auto">
@@ -39,7 +39,7 @@
                     }
                     else
                     {
-                        <span>Generate Instances</span>
+                        <span>Generate Orders</span>
                     }
                 </button>
             </div>
@@ -68,7 +68,7 @@
                 <span class="badge bg-dark text-light fs-6">@_generateResult.SkippedCount skipped</span>
             </div>
         </div>
-        @if (_generateResult.Instances.Any())
+        @if (_generateResult.Orders.Any())
         {
             <div class="card-body p-0">
                 <table class="table table-sm table-hover mb-0">
@@ -83,7 +83,7 @@
                         </tr>
                     </thead>
                     <tbody>
-                        @foreach (var inst in _generateResult.Instances)
+                        @foreach (var inst in _generateResult.Orders)
                         {
                             <tr>
                                 <td>
@@ -110,7 +110,7 @@
         else
         {
             <div class="card-body text-muted fst-italic">
-                No new instances were created — all already existed, or no active standing orders matched.
+                No new orders were created — all already existed, or no active standing orders matched.
             </div>
         }
     </div>
@@ -120,7 +120,7 @@
 <div class="card">
     <div class="card-header">
         <div class="d-flex align-items-center gap-3">
-            <h5 class="mb-0">Browse Instances by Week</h5>
+            <h5 class="mb-0">Browse Orders by Week</h5>
             <div class="ms-auto d-flex align-items-center gap-2">
                 <button class="btn btn-sm btn-outline-secondary" @onclick="PreviousWeek">‹ Prev</button>
                 <span class="fw-semibold px-2">@SnapToMonday(_browseDate).ToString("ddd, MMM d, yyyy")</span>
@@ -144,7 +144,7 @@
         {
             @if (!_browseInstances.Any())
             {
-                <div class="p-3 text-muted fst-italic">No instances for this week.</div>
+                <div class="p-3 text-muted fst-italic">No orders for this week.</div>
             }
             else
             {
@@ -184,7 +184,7 @@
                                 <td class="text-end">@inst.TotalAmount.ToString("C")</td>
                                 <td class="text-center">@(inst.IsSample ? "Yes" : "—")</td>
                                 <td class="text-end">
-                                    <a href="/orders/@inst.CustomerId/@inst.InstanceId/edit"
+                                    <a href="/orders/@inst.CustomerId/@inst.OrderId/edit"
                                        class="btn btn-sm btn-outline-primary">View</a>
                                 </td>
                             </tr>
@@ -200,10 +200,10 @@
     private DateTime _generateDate = DateTime.Today;
     private bool _generating;
     private string? _generateError;
-    private GenerateInstancesResponse? _generateResult;
+    private GenerateOrdersResponse? _generateResult;
 
     private DateTime _browseDate = DateTime.Today;
-    private WeekInstanceSummary[]? _browseInstances;
+    private WeekOrderSummary[]? _browseInstances;
     private bool _browseLoading;
     private string? _browseError;
 
@@ -235,7 +235,7 @@
 
         try
         {
-            _generateResult = await OrderApi.GenerateInstancesAsync(
+            _generateResult = await OrderApi.GenerateOrdersAsync(
                 SnapToMonday(_generateDate), _cts.Token);
 
             if (_generateResult is null)
@@ -278,7 +278,7 @@
         _browseError   = null;
         try
         {
-            _browseInstances = await OrderApi.BrowseWeekInstancesAsync(
+            _browseInstances = await OrderApi.BrowseWeekOrdersAsync(
                 SnapToMonday(_browseDate), _cts.Token);
         }
         catch (OperationCanceledException)

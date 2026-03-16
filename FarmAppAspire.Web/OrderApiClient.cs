@@ -14,7 +14,7 @@ public class OrderApiClient(HttpClient httpClient)
     public async Task<OrderSummary[]> GetOrdersAsync(
         Guid customerId, string? status = null, CancellationToken cancellationToken = default)
     {
-        var url = $"/customers/{customerId}/order-instances"
+        var url = $"/customers/{customerId}/orders"
                   + (status is not null ? $"?status={status}" : "");
         var result = await httpClient.GetFromJsonAsync<IEnumerable<OrderSummary>>(url, JsonOptions, cancellationToken);
         return result?.ToArray() ?? [];
@@ -26,7 +26,7 @@ public class OrderApiClient(HttpClient httpClient)
         var queryParts = new List<string>();
         if (customerId.HasValue) queryParts.Add($"customerId={customerId.Value}");
         if (status is not null) queryParts.Add($"status={Uri.EscapeDataString(status)}");
-        var url = "/order-instances" + (queryParts.Count > 0 ? "?" + string.Join("&", queryParts) : "");
+        var url = "/orders" + (queryParts.Count > 0 ? "?" + string.Join("&", queryParts) : "");
         var result = await httpClient.GetFromJsonAsync<IEnumerable<AllOrderSummary>>(url, JsonOptions, cancellationToken);
         return result?.ToArray() ?? [];
     }
@@ -34,7 +34,7 @@ public class OrderApiClient(HttpClient httpClient)
     public async Task<OrderDetail?> GetOrderAsync(
         Guid customerId, Guid orderId, CancellationToken cancellationToken = default) =>
         await httpClient.GetFromJsonAsync<OrderDetail>(
-            $"/customers/{customerId}/order-instances/{orderId}", JsonOptions, cancellationToken);
+            $"/customers/{customerId}/orders/{orderId}", JsonOptions, cancellationToken);
 
     public async Task<FedExTierInfo[]> GetFedExTiersAsync(CancellationToken cancellationToken = default)
     {
@@ -50,25 +50,11 @@ public class OrderApiClient(HttpClient httpClient)
         return boxes ?? [];
     }
 
-    public async Task<StandingOrderResult?> CreateStandingOrderAsync(
-        Guid customerId, CreateStandingOrderRequest request, CancellationToken cancellationToken = default)
+    public async Task<OrderDetail?> CreateOrderAsync(
+        Guid customerId, CreateOrderRequest request, CancellationToken cancellationToken = default)
     {
         var response = await httpClient.PostAsJsonAsync(
-            $"/customers/{customerId}/standing-orders", request, JsonOptions, cancellationToken);
-        if (!response.IsSuccessStatusCode)
-        {
-            var body = await response.Content.ReadAsStringAsync(cancellationToken);
-            throw new HttpRequestException(
-                $"HTTP {(int)response.StatusCode}: {body}", null, response.StatusCode);
-        }
-        return await response.Content.ReadFromJsonAsync<StandingOrderResult>(JsonOptions, cancellationToken);
-    }
-
-    public async Task<OrderDetail?> CreateFedExOrderAsync(
-        Guid customerId, CreateFedExOrderRequest request, CancellationToken cancellationToken = default)
-    {
-        var response = await httpClient.PostAsJsonAsync(
-            $"/customers/{customerId}/fedex-orders", request, JsonOptions, cancellationToken);
+            $"/customers/{customerId}/orders", request, JsonOptions, cancellationToken);
         if (!response.IsSuccessStatusCode)
         {
             var body = await response.Content.ReadAsStringAsync(cancellationToken);
@@ -82,7 +68,7 @@ public class OrderApiClient(HttpClient httpClient)
         Guid customerId, Guid instanceId, CancellationToken cancellationToken = default)
     {
         var response = await httpClient.PostAsync(
-            $"/customers/{customerId}/order-instances/{instanceId}/cancel", null, cancellationToken);
+            $"/customers/{customerId}/orders/{instanceId}/cancel", null, cancellationToken);
         return response.IsSuccessStatusCode;
     }
 
@@ -90,7 +76,7 @@ public class OrderApiClient(HttpClient httpClient)
         Guid customerId, Guid instanceId, UpdateOrderRequest request, CancellationToken cancellationToken = default)
     {
         var response = await httpClient.PatchAsJsonAsync(
-            $"/customers/{customerId}/order-instances/{instanceId}", request, JsonOptions, cancellationToken);
+            $"/customers/{customerId}/orders/{instanceId}", request, JsonOptions, cancellationToken);
         return response.IsSuccessStatusCode;
     }
 
@@ -169,7 +155,7 @@ public class OrderApiClient(HttpClient httpClient)
         Guid customerId, Guid instanceId, CancellationToken cancellationToken = default)
     {
         var response = await httpClient.PostAsync(
-            $"/customers/{customerId}/order-instances/{instanceId}/harvest", null, cancellationToken);
+            $"/customers/{customerId}/orders/{instanceId}/harvest", null, cancellationToken);
         if (!response.IsSuccessStatusCode) return null;
         return await response.Content.ReadFromJsonAsync<OrderDetail>(JsonOptions, cancellationToken);
     }
@@ -178,7 +164,7 @@ public class OrderApiClient(HttpClient httpClient)
         Guid customerId, Guid instanceId, DateTime inspectionDate, CancellationToken cancellationToken = default)
     {
         var response = await httpClient.PostAsJsonAsync(
-            $"/customers/{customerId}/order-instances/{instanceId}/inspect",
+            $"/customers/{customerId}/orders/{instanceId}/inspect",
             new InspectOrderRequest(inspectionDate), JsonOptions, cancellationToken);
         if (!response.IsSuccessStatusCode) return null;
         return await response.Content.ReadFromJsonAsync<OrderDetail>(JsonOptions, cancellationToken);
@@ -188,31 +174,31 @@ public class OrderApiClient(HttpClient httpClient)
         Guid customerId, Guid instanceId, CancellationToken cancellationToken = default)
     {
         var response = await httpClient.PostAsync(
-            $"/customers/{customerId}/order-instances/{instanceId}/ship", null, cancellationToken);
+            $"/customers/{customerId}/orders/{instanceId}/ship", null, cancellationToken);
         if (!response.IsSuccessStatusCode) return null;
         return await response.Content.ReadFromJsonAsync<OrderDetail>(JsonOptions, cancellationToken);
     }
 
-    // ── Admin: instance generation ────────────────────────────────────────────
+    // ── Admin: order generation ─────────────────────────────────────────────
 
-    public async Task<GenerateInstancesResponse?> GenerateInstancesAsync(
-        DateTime forWeek, CancellationToken cancellationToken = default)
-    {
-        var response = await httpClient.PostAsJsonAsync(
-            "/admin/generate-instances",
-            new GenerateInstancesRequest(forWeek),
-            JsonOptions, cancellationToken);
-        if (!response.IsSuccessStatusCode) return null;
-        return await response.Content.ReadFromJsonAsync<GenerateInstancesResponse>(JsonOptions, cancellationToken);
-    }
+        public async Task<GenerateOrdersResponse?> GenerateOrdersAsync(
+            DateTime forWeek, CancellationToken cancellationToken = default)
+        {
+            var response = await httpClient.PostAsJsonAsync(
+                "/admin/generate-orders",
+                new GenerateOrdersRequest(forWeek),
+                JsonOptions, cancellationToken);
+            if (!response.IsSuccessStatusCode) return null;
+            return await response.Content.ReadFromJsonAsync<GenerateOrdersResponse>(JsonOptions, cancellationToken);
+        }
 
-    public async Task<WeekInstanceSummary[]> BrowseWeekInstancesAsync(
-        DateTime weekOf, CancellationToken cancellationToken = default)
-    {
-        var result = await httpClient.GetFromJsonAsync<IEnumerable<WeekInstanceSummary>>(
-            $"/admin/instances?weekOf={weekOf:yyyy-MM-dd}", JsonOptions, cancellationToken);
-        return result?.ToArray() ?? [];
-    }
+        public async Task<WeekOrderSummary[]> BrowseWeekOrdersAsync(
+            DateTime weekOf, CancellationToken cancellationToken = default)
+        {
+            var result = await httpClient.GetFromJsonAsync<IEnumerable<WeekOrderSummary>>(
+                $"/admin/orders?weekOf={weekOf:yyyy-MM-dd}", JsonOptions, cancellationToken);
+            return result?.ToArray() ?? [];
+        }
 }
 
 public enum FedExTierSize { OneOz, TwoOz, FourOz, EightOz, OneLb, TwoLb, ThreeLb, FiveLb }
@@ -222,11 +208,10 @@ public enum MonthlyWeek { First = 1, Second = 2, Third = 3, Fourth = 4 }
 
 public record FedExTierInfo(string TierSize, decimal WeightOz, decimal FixedPrice);
 public record InsulatedBoxInfo(string Size, decimal WeightLbs, decimal BasePricePerLb, bool IsDefault = false);
-public record FedExOrderLineRequest(FedExTierSize TierSize, int Qty);
-public record CreateFedExOrderRequest(Guid? ContactId, IReadOnlyList<FedExOrderLineRequest> Lines, DateTime? WeekOf = null, bool IsSample = false);
+public record CreateOrderLineRequest(InsulatedBoxSize? BoxSize, FedExTierSize? FedExTierSize, int Qty);
+public record CreateOrderRequest(OrderChannel Channel, DateTime WeekOf, IReadOnlyList<CreateOrderLineRequest> Lines, Guid? ContactId = null, bool IsSample = false);
 public record StandingOrderLineRequest(InsulatedBoxSize BoxSize, int Qty);
-public record CreateStandingOrderRequest(Guid? ContactId, OrderFrequency Frequency, MonthlyWeek? MonthlyWeek, bool IsSample, IReadOnlyList<StandingOrderLineRequest> Lines);
-public record StandingOrderResult(Guid Id);
+public record CreateStandingOrderRequest(OrderChannel Channel, Guid? ContactId, OrderFrequency Frequency, MonthlyWeek? MonthlyWeek, bool IsSample, IReadOnlyList<StandingOrderLineRequest> Lines);
 public record UpdateOrderRequest(Guid? ContactId, bool IsSample);
 public record WebUpdateStandingOrderRequest(OrderFrequency Frequency, MonthlyWeek? MonthlyWeek, bool IsSample, Guid? ContactId, IReadOnlyList<StandingOrderLineRequest> Lines);
 public record AddSkipWeekRequest(DateTime WeekOf);
@@ -237,12 +222,14 @@ public record StandingOrderSkipDetail(Guid Id, DateTime WeekOf);
 public record AllStandingOrderSummary(
     Guid Id, Guid CustomerId, string CustomerDisplayName,
     ChannelType CustomerChannelType, CustomerType CustomerType,
+    string Channel,
     string Status, string Frequency, string? MonthlyWeek,
     bool IsSample, int SeasonYear, DateTime StartWeek,
     int TotalBoxes, decimal TotalWeightLbs, decimal TotalAmount,
     DateTime CreatedAt, string CreatedBy);
 public record StandingOrderDetail(
     Guid Id, Guid CustomerId, Guid? ContactId,
+    string Channel,
     string Status, string Frequency, string? MonthlyWeek,
     bool IsSample, int SeasonYear, DateTime StartWeek,
     IReadOnlyList<StandingOrderLineDetail> Lines,
@@ -250,17 +237,18 @@ public record StandingOrderDetail(
     int TotalBoxes, decimal TotalWeightLbs, decimal TotalAmount,
     DateTime CreatedAt, string CreatedBy);
 
-public record OrderSummary(Guid Id, Guid? StandingOrderId, Guid CustomerId, string Channel, string Status, DateTime WeekOf, bool IsSample, int TotalQty, decimal TotalAmount);
+public record OrderSummary(Guid Id, Guid StandingOrderId, Guid CustomerId, string Channel, string Status, DateTime WeekOf, bool IsSample, int TotalQty, decimal TotalAmount);
 public record AllOrderSummary(
-    Guid Id, Guid? StandingOrderId, Guid CustomerId,
+    Guid Id, Guid StandingOrderId, Guid CustomerId,
     string CustomerDisplayName, string CustomerChannelType, string CustomerType,
     string Channel, string Status, DateTime WeekOf, bool IsSample,
     int TotalQty, decimal TotalAmount);
 public record OrderLine(Guid Id, string? BoxSize, int Qty, decimal? EffectivePricePerLb, string? FedExTierSize, decimal? FedExFixedPrice, string? PackagingType);
-public record OrderDetail(Guid Id, Guid? StandingOrderId, Guid CustomerId, string Channel, string Status, DateTime WeekOf, bool IsSample, Guid? ContactId, int TotalQty, decimal TotalAmount, IReadOnlyList<OrderLine> Lines);
+public record OrderDetail(Guid Id, Guid StandingOrderId, Guid CustomerId, string Channel, string Status, DateTime WeekOf, bool IsSample, Guid? ContactId, int TotalQty, decimal TotalAmount, IReadOnlyList<OrderLine> Lines);
 
 // ── Admin DTOs ────────────────────────────────────────────────────────────────
-public record GenerateInstancesRequest(DateTime ForWeek);
-public record GeneratedInstanceSummary(Guid InstanceId, Guid CustomerId, string CustomerDisplayName, string? CustomerKey, string Channel, DateTime WeekOf, bool IsSample, int TotalQty, decimal TotalAmount);
-public record GenerateInstancesResponse(int GeneratedCount, int SkippedCount, DateTime WeekOf, IReadOnlyList<GeneratedInstanceSummary> Instances);
-public record WeekInstanceSummary(Guid InstanceId, Guid CustomerId, string CustomerDisplayName, string? CustomerKey, string Channel, string Status, DateTime WeekOf, bool IsSample, int TotalQty, decimal TotalAmount);
+public record GenerateOrdersRequest(DateTime ForWeek);
+public record GeneratedOrderSummary(Guid OrderId, Guid CustomerId, string CustomerDisplayName, string? CustomerKey, string Channel, DateTime WeekOf, bool IsSample, int TotalQty, decimal TotalAmount);
+public record GenerateOrdersResponse(int GeneratedCount, int SkippedCount, DateTime WeekOf, IReadOnlyList<GeneratedOrderSummary> Orders);
+public record WeekOrderSummary(Guid OrderId, Guid CustomerId, string CustomerDisplayName, string? CustomerKey, string Channel, string Status, DateTime WeekOf, bool IsSample, int TotalQty, decimal TotalAmount);
+public enum OrderChannel { Insulated, FedEx }

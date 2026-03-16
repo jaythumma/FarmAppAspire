@@ -59,6 +59,20 @@ public class FedExOrderContactTests : IDisposable
         return customer;
     }
 
+    private async Task<StandingOrder> SeedFedExStandingOrderAsync(Guid customerId)
+    {
+        var so = new StandingOrder
+        {
+            Id = Guid.NewGuid(), CustomerId = customerId, Channel = OrderChannel.FedEx,
+            Frequency = OrderFrequency.OnRequest, Status = StandingOrderStatus.Active,
+            SeasonYear = 2024, StartWeek = DateTime.UtcNow.Date,
+            CreatedAt = DateTime.UtcNow, CreatedBy = "test"
+        };
+        _db.StandingOrders.Add(so);
+        await _db.SaveChangesAsync();
+        return so;
+    }
+
     // ── Scenario: Contact from wholesale customer is recorded on a FedEx order ──
 
     [Fact]
@@ -72,21 +86,23 @@ public class FedExOrderContactTests : IDisposable
 
         Assert.True(contactBelongsToCustomer, "A contact belonging to the customer must pass validation.");
 
-        var instance = new OrderInstance
+        var so = await SeedFedExStandingOrderAsync(customer.Id);
+        var instance = new Order
         {
-            Id        = Guid.NewGuid(),
-            CustomerId = customer.Id,
-            ContactId  = contact.Id,
-            Channel   = OrderChannel.FedEx,
-            Status    = OrderInstanceStatus.Pending,
-            WeekOf    = DateTime.UtcNow.Date,
-            CreatedAt = DateTime.UtcNow,
-            CreatedBy = "test"
+            Id              = Guid.NewGuid(),
+            StandingOrderId = so.Id,
+            CustomerId      = customer.Id,
+            ContactId       = contact.Id,
+            Channel         = OrderChannel.FedEx,
+            Status          = OrderStatus.Pending,
+            WeekOf          = DateTime.UtcNow.Date,
+            CreatedAt       = DateTime.UtcNow,
+            CreatedBy       = "test"
         };
-        _db.OrderInstances.Add(instance);
+        _db.Orders.Add(instance);
         await _db.SaveChangesAsync();
 
-        var saved = await _db.OrderInstances.FindAsync(instance.Id);
+        var saved = await _db.Orders.FindAsync(instance.Id);
         Assert.Equal(contact.Id, saved!.ContactId);
     }
 
@@ -122,21 +138,23 @@ public class FedExOrderContactTests : IDisposable
         var shouldValidate = contactId.HasValue;
         Assert.False(shouldValidate, "Retail FedEx orders must not require a ContactId.");
 
-        var instance = new OrderInstance
+        var so = await SeedFedExStandingOrderAsync(customer.Id);
+        var instance = new Order
         {
-            Id        = Guid.NewGuid(),
-            CustomerId = customer.Id,
-            ContactId  = contactId,
-            Channel   = OrderChannel.FedEx,
-            Status    = OrderInstanceStatus.Pending,
-            WeekOf    = DateTime.UtcNow.Date,
-            CreatedAt = DateTime.UtcNow,
-            CreatedBy = "test"
+            Id              = Guid.NewGuid(),
+            StandingOrderId = so.Id,
+            CustomerId      = customer.Id,
+            ContactId       = contactId,
+            Channel         = OrderChannel.FedEx,
+            Status          = OrderStatus.Pending,
+            WeekOf          = DateTime.UtcNow.Date,
+            CreatedAt       = DateTime.UtcNow,
+            CreatedBy       = "test"
         };
-        _db.OrderInstances.Add(instance);
+        _db.Orders.Add(instance);
         await _db.SaveChangesAsync();
 
-        var saved = await _db.OrderInstances.FindAsync(instance.Id);
+        var saved = await _db.Orders.FindAsync(instance.Id);
         Assert.Null(saved!.ContactId);
     }
 

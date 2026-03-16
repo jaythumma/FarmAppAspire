@@ -1,17 +1,17 @@
 namespace FarmAppAspire.CustomerService.Models;
 
-public class OrderInstance
+public class Order
 {
     public Guid Id { get; set; }
-    public Guid? StandingOrderId { get; set; }
-    public StandingOrder? StandingOrder { get; set; }
+    public Guid StandingOrderId { get; set; }
+    public StandingOrder StandingOrder { get; set; } = null!;
     public Guid CustomerId { get; set; }
     public Customer Customer { get; set; } = null!;
     public Guid? ContactId { get; set; }
     public CustomerContact? Contact { get; set; }
 
     public OrderChannel Channel { get; set; }
-    public OrderInstanceStatus Status { get; set; } = OrderInstanceStatus.Pending;
+    public OrderStatus Status { get; set; } = OrderStatus.Pending;
     /// <summary>For insulated: the Monday of the harvest week. For FedEx: the order date.</summary>
     public DateTime WeekOf { get; set; }
     public DateTime? ShipDate { get; set; }
@@ -22,15 +22,15 @@ public class OrderInstance
     public DateTime? ModifiedAt { get; set; }
     public string? ModifiedBy { get; set; }
 
-    public ICollection<OrderInstanceLine> Lines { get; set; } = [];
+    public ICollection<OrderLine> Lines { get; set; } = [];
     public Invoice? Invoice { get; set; }
 }
 
-public class OrderInstanceLine
+public class OrderLine
 {
     public Guid Id { get; set; }
-    public Guid OrderInstanceId { get; set; }
-    public OrderInstance OrderInstance { get; set; } = null!;
+    public Guid OrderId { get; set; }
+    public Order Order { get; set; } = null!;
 
     // Insulated fields
     public InsulatedBoxSize? BoxSize { get; set; }

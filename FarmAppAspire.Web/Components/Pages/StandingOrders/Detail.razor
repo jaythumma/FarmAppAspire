@@ -141,6 +141,8 @@ else
                     <div class="card-header"><h5 class="mb-0">Details</h5></div>
                     <div class="card-body">
                         <dl class="row mb-0">
+                            <dt class="col-sm-5">Channel</dt>
+                            <dd class="col-sm-7"><span class="badge bg-info text-dark">@_so.Channel</span></dd>
                             <dt class="col-sm-5">Frequency</dt>
                             <dd class="col-sm-7">@_so.Frequency @(_so.MonthlyWeek is not null ? $"({_so.MonthlyWeek})" : "")</dd>
                             <dt class="col-sm-5">Start Week</dt>
@@ -270,19 +272,19 @@ else
             </div>
         </div>
 
-        <!-- Linked instances (order schedule) -->
+        <!-- Linked orders (order schedule) -->
         <div class="card">
             <div class="card-header">
-                <h5 class="mb-0">Order Schedule (Instances)</h5>
+                <h5 class="mb-0">Order Schedule</h5>
             </div>
             <div class="card-body">
                 @if (_instances is null)
                 {
-                    <p><em>Loading instances…</em></p>
+                    <p><em>Loading orders…</em></p>
                 }
                 else if (!_instances.Any())
                 {
-                    <p class="text-muted mb-0">No order instances yet.</p>
+                    <p class="text-muted mb-0">No orders yet.</p>
                 }
                 else
                 {
@@ -329,7 +331,7 @@ else
                                         @if (OrderLifecycleRules.CanCancel(inst.Status))
                                         {
                                             <button class="btn btn-sm btn-outline-danger"
-                                                    @onclick="() => CancelInstanceAsync(inst)">Cancel</button>
+                                                    @onclick="() => CancelOrderAsync(inst)">Cancel</button>
                                         }
                                     </td>
                                 </tr>
@@ -470,32 +472,32 @@ else
     private async Task HarvestAsync(OrderSummary inst)
     {
         var result = await OrderApi.HarvestOrderAsync(CustomerId, inst.Id, _cts.Token);
-        if (result is not null) { await RefreshInstancesAsync(); _successMessage = "Marked as Harvested."; }
+        if (result is not null) { await RefreshOrdersAsync(); _successMessage = "Marked as Harvested."; }
         else _errorMessage = "Failed to harvest.";
     }
 
     private async Task InspectAsync(OrderSummary inst)
     {
         var result = await OrderApi.InspectOrderAsync(CustomerId, inst.Id, DateTime.UtcNow, _cts.Token);
-        if (result is not null) { await RefreshInstancesAsync(); _successMessage = "Marked as Inspected."; }
+        if (result is not null) { await RefreshOrdersAsync(); _successMessage = "Marked as Inspected."; }
         else _errorMessage = "Inspect failed — inspection must occur on a Friday or Monday.";
     }
 
     private async Task ShipAsync(OrderSummary inst)
     {
         var result = await OrderApi.ShipOrderAsync(CustomerId, inst.Id, _cts.Token);
-        if (result is not null) { await RefreshInstancesAsync(); _successMessage = "Marked as Shipped."; }
+        if (result is not null) { await RefreshOrdersAsync(); _successMessage = "Marked as Shipped."; }
         else _errorMessage = "Failed to ship.";
     }
 
-    private async Task CancelInstanceAsync(OrderSummary inst)
+    private async Task CancelOrderAsync(OrderSummary inst)
     {
         var ok = await OrderApi.CancelOrderAsync(CustomerId, inst.Id, _cts.Token);
-        if (ok) { await RefreshInstancesAsync(); _successMessage = "Instance cancelled."; }
+        if (ok) { await RefreshOrdersAsync(); _successMessage = "Order cancelled."; }
         else _errorMessage = "Failed to cancel.";
     }
 
-    private async Task RefreshInstancesAsync()
+    private async Task RefreshOrdersAsync()
     {
         var all = await OrderApi.GetOrdersAsync(CustomerId, cancellationToken: _cts.Token);
         _instances = all.Where(i => i.StandingOrderId == SoId).ToArray();

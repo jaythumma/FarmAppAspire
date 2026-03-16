@@ -16,6 +16,7 @@ public class StandingOrderListHelperTests
         new(
             Guid.NewGuid(), Guid.NewGuid(), customerName,
             channel, type,
+            "Insulated",
             status, frequency, null,
             false, 2025, startWeek ?? new DateTime(2025, 1, 6),
             1, 10m, 100m,
@@ -162,6 +163,7 @@ public class StandingOrderListHelperTests
         var id = Guid.NewGuid();
         var match = new AllStandingOrderSummary(
             Guid.NewGuid(), id, "Alice", ChannelType.Direct, CustomerType.Wholesale,
+            "Insulated",
             "Active", "Weekly", null, false, 2025, new DateTime(2025, 1, 6),
             1, 10m, 100m, DateTime.UtcNow, "test");
         var other = Make("Bob", ChannelType.Direct, CustomerType.Retail);

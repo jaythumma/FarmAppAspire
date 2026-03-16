@@ -43,6 +43,7 @@ public static class StandingOrderEndpoints
                     customer?.DisplayName ?? s.CustomerId.ToString(),
                     customer?.ChannelType ?? ChannelType.Direct,
                     customer?.Type ?? CustomerType.Retail,
+                    s.Channel,
                     s.Status, s.Frequency, s.MonthlyWeek,
                     s.IsSample, s.SeasonYear, s.StartWeek,
                     totalBoxes, totalWeight, totalAmount,
@@ -85,20 +86,21 @@ public static class StandingOrderEndpoints
             if (!await db.Customers.AnyAsync(c => c.Id == customerId))
                 return Results.NotFound();
 
-            if (!req.Lines.Any())
-                return Results.BadRequest("At least one order line is required.");
+            if (req.Channel == OrderChannel.Insulated && !req.Lines.Any())
+                return Results.BadRequest("At least one order line is required for Insulated standing orders.");
 
             // Validate contact belongs to customer
             if (req.ContactId.HasValue &&
                 !await db.CustomerContacts.AnyAsync(c => c.Id == req.ContactId && c.CustomerId == customerId))
                 return Results.BadRequest("ContactId does not belong to this customer.");
 
-            // Single active standing order rule
+            // Single active standing order per channel rule
             var hasActive = await db.StandingOrders.AnyAsync(s =>
                 s.CustomerId == customerId &&
+                s.Channel == req.Channel &&
                 s.Status != StandingOrderStatus.Stopped &&
                 s.Frequency != OrderFrequency.Stopped);
-            if (hasActive) return Results.Conflict("Customer already has an active standing order.");
+            if (hasActive) return Results.Conflict($"Customer already has an active {req.Channel} standing order.");
 
             var userId  = ctx.Request.Headers["X-User-Id"].FirstOrDefault() ?? "system";
             var monday  = SeasonYearService.MondayOf(DateTime.UtcNow);
@@ -108,6 +110,7 @@ public static class StandingOrderEndpoints
             {
                 Id         = Guid.NewGuid(),
                 CustomerId = customerId,
+                Channel    = req.Channel,
                 ContactId  = req.ContactId,
                 Frequency  = req.Frequency,
                 MonthlyWeek = req.MonthlyWeek,
@@ -236,13 +239,13 @@ public static class StandingOrderEndpoints
             };
             db.StandingOrderSkips.Add(skip);
 
-            // Cancel pending instance for that week if it exists
-            var instance = await db.OrderInstances.FirstOrDefaultAsync(i =>
+            // Cancel pending order for that week if it exists
+            var instance = await db.Orders.FirstOrDefaultAsync(i =>
                 i.StandingOrderId == soId &&
                 i.WeekOf.Date == weekMonday.Date &&
-                i.Status == OrderInstanceStatus.Pending);
+                i.Status == OrderStatus.Pending);
             if (instance is not null)
-                instance.Status = OrderInstanceStatus.Cancelled;
+                instance.Status = OrderStatus.Cancelled;
 
             await db.SaveChangesAsync();
             return Results.Ok();
@@ -277,6 +280,7 @@ public static class StandingOrderEndpoints
 
         return new StandingOrderDto(
             so.Id, so.CustomerId, so.ContactId,
+            so.Channel,
             so.Status, so.Frequency, so.MonthlyWeek,
             so.IsSample, so.SeasonYear, so.StartWeek,
             so.Lines.Select(l => new StandingOrderLineDto(l.Id, l.BoxSize, l.Qty)).ToList(),
