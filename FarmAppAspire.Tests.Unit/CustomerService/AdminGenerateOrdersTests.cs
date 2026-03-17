@@ -128,7 +128,7 @@ public class AdminGenerateOrdersTests : IDisposable
         var fedExSo = new StandingOrder
         {
             Id = Guid.NewGuid(), CustomerId = customerId, Channel = OrderChannel.FedEx,
-            Frequency = OrderFrequency.OnRequest, Status = StandingOrderStatus.Active,
+            Frequency = OrderFrequency.Weekly, Status = StandingOrderStatus.Active,
             SeasonYear = 2025, StartWeek = new DateTime(2025, 6, 2),
             CreatedAt = DateTime.UtcNow, CreatedBy = "test"
         };
@@ -152,58 +152,4 @@ public class AdminGenerateOrdersTests : IDisposable
         Assert.Equal(insulatedSo.Id, eligible[0].Id);
     }
 
-    // ── OnRequest insulated SO: generated once, then auto-paused (task 11.3) ─
-
-    [Fact]
-    public async Task OnRequest_InsulatedSO_IsGeneratedOnce_ThenAutoPaused()
-    {
-        var customerId = Guid.NewGuid();
-        _db.Customers.Add(new Customer
-        {
-            Id = customerId, Type = CustomerType.Retail, DisplayName = "OnReq Farm",
-            CreatedAt = DateTime.UtcNow, CreatedBy = "test"
-        });
-
-        var so = new StandingOrder
-        {
-            Id = Guid.NewGuid(), CustomerId = customerId, Channel = OrderChannel.Insulated,
-            Frequency = OrderFrequency.OnRequest, Status = StandingOrderStatus.Active,
-            SeasonYear = 2025, StartWeek = new DateTime(2025, 6, 2),
-            CreatedAt = DateTime.UtcNow, CreatedBy = "test"
-        };
-        _db.StandingOrders.Add(so);
-        await _db.SaveChangesAsync();
-
-        var weekOf = new DateTime(2025, 6, 2);
-
-        // Simulate the AdminEndpoints generation loop for a single standing order
-        var order = new Order
-        {
-            Id              = Guid.NewGuid(),
-            StandingOrderId = so.Id,
-            CustomerId      = so.CustomerId,
-            Channel         = OrderChannel.Insulated,
-            Status          = OrderStatus.Pending,
-            WeekOf          = weekOf,
-            IsSample        = so.IsSample,
-            CreatedAt       = DateTime.UtcNow,
-            CreatedBy       = "test",
-            Lines           = []
-        };
-        _db.Orders.Add(order);
-
-        // OnRequest: auto-pause after generation
-        if (so.Frequency == OrderFrequency.OnRequest)
-            so.Status = StandingOrderStatus.Paused;
-
-        await _db.SaveChangesAsync();
-
-        // THEN the order was generated
-        var generatedOrder = await _db.Orders.FirstOrDefaultAsync(o => o.StandingOrderId == so.Id);
-        Assert.NotNull(generatedOrder);
-
-        // AND the standing order is now paused (regression guard)
-        var updatedSo = await _db.StandingOrders.FindAsync(so.Id);
-        Assert.Equal(StandingOrderStatus.Paused, updatedSo!.Status);
     }
-}

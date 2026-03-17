@@ -15,7 +15,7 @@ public static class OrderEndpoints
 
         // ── All-orders endpoint (no customer filter required) ─────────────────
         app.MapGet("/orders", async (CustomerDbContext db,
-            Guid? customerId = null, string? status = null) =>
+            Guid? customerId = null, string? status = null, string? channel = null, DateOnly? weekOf = null) =>
         {
             var q = db.Orders.Include(i => i.Lines).AsQueryable();
 
@@ -24,6 +24,15 @@ public static class OrderEndpoints
 
             if (Enum.TryParse<OrderStatus>(status, ignoreCase: true, out var s))
                 q = q.Where(i => i.Status == s);
+
+            if (Enum.TryParse<OrderChannel>(channel, ignoreCase: true, out var ch))
+                q = q.Where(i => i.Channel == ch);
+
+            if (weekOf.HasValue)
+            {
+                var weekStart = weekOf.Value.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc);
+                q = q.Where(i => i.WeekOf >= weekStart && i.WeekOf < weekStart.AddDays(7));
+            }
 
             var items = await q.OrderByDescending(i => i.WeekOf).ToListAsync();
             var boxConfigs = await db.InsulatedBoxConfigs.ToListAsync();
@@ -83,9 +92,8 @@ public static class OrderEndpoints
 
         // ── Unified order creation (both Insulated and FedEx) ─────────────────
         /// <remarks>
-        /// Finds or auto-creates a StandingOrder for (customerId, channel) before persisting the Order.
-        /// For Insulated: creates StandingOrder with Frequency=Weekly, lines from request.
-        /// For FedEx:     creates StandingOrder with Frequency=OnRequest, empty lines.
+        /// For Insulated: finds or auto-creates a StandingOrder, then creates the Order instance.
+        /// For FedEx: creates the Order directly with StandingOrderId = null (ad-hoc, no subscription).
         /// </remarks>
         g.MapPost("/", async (Guid customerId, CreateOrderRequest req,
             CustomerDbContext db, HttpContext ctx) =>
@@ -104,54 +112,53 @@ public static class OrderEndpoints
                 SeasonYearService.MondayOf(req.WeekOf).Date, DateTimeKind.Utc);
             var userId = ctx.Request.Headers["X-User-Id"].FirstOrDefault() ?? "system";
 
-            // Find or auto-create the StandingOrder for this (customer, channel) pair
-            var standingOrder = await db.StandingOrders
-                .FirstOrDefaultAsync(s => s.CustomerId == customerId
-                                       && s.Channel == req.Channel
-                                       && s.Status != StandingOrderStatus.Stopped);
+            Guid? standingOrderId = null;
 
-            if (standingOrder is null)
+            if (req.Channel == OrderChannel.Insulated)
             {
-                var seasonYear = SeasonYearService.CurrentSeasonYear(weekOf);
-                standingOrder = new StandingOrder
-                {
-                    Id         = Guid.NewGuid(),
-                    CustomerId = customerId,
-                    Channel    = req.Channel,
-                    ContactId  = req.ContactId,
-                    Frequency  = req.Channel == OrderChannel.FedEx
-                                     ? OrderFrequency.OnRequest
-                                     : OrderFrequency.Weekly,
-                    IsSample   = req.IsSample,
-                    Status     = StandingOrderStatus.Active,
-                    SeasonYear = seasonYear,
-                    StartWeek  = weekOf,
-                    CreatedAt  = DateTime.UtcNow,
-                    CreatedBy  = userId
-                };
+                // Find or auto-create the StandingOrder for this (customer, channel) pair
+                var standingOrder = await db.StandingOrders
+                    .FirstOrDefaultAsync(s => s.CustomerId == customerId
+                                           && s.Channel == OrderChannel.Insulated
+                                           && s.Status != StandingOrderStatus.Stopped);
 
-                // For Insulated: copy lines from the request as the standing order template
-                if (req.Channel == OrderChannel.Insulated)
+                if (standingOrder is null)
                 {
-                    standingOrder.Lines = req.Lines
-                        .Where(l => l.BoxSize.HasValue)
-                        .Select(l => new StandingOrderLine
-                        {
-                            Id              = Guid.NewGuid(),
-                            StandingOrderId = standingOrder.Id,
-                            BoxSize         = l.BoxSize!.Value,
-                            Qty             = l.Qty
-                        }).ToList();
+                    var seasonYear = SeasonYearService.CurrentSeasonYear(weekOf);
+                    standingOrder = new StandingOrder
+                    {
+                        Id         = Guid.NewGuid(),
+                        CustomerId = customerId,
+                        Channel    = OrderChannel.Insulated,
+                        ContactId  = req.ContactId,
+                        Frequency  = OrderFrequency.Weekly,
+                        IsSample   = req.IsSample,
+                        Status     = StandingOrderStatus.Active,
+                        SeasonYear = seasonYear,
+                        StartWeek  = weekOf,
+                        CreatedAt  = DateTime.UtcNow,
+                        CreatedBy  = userId,
+                        Lines      = req.Lines
+                            .Where(l => l.BoxSize.HasValue)
+                            .Select(l => new StandingOrderLine
+                            {
+                                Id              = Guid.NewGuid(),
+                                StandingOrderId = standingOrder!.Id,
+                                BoxSize         = l.BoxSize!.Value,
+                                Qty             = l.Qty
+                            }).ToList()
+                    };
+                    db.StandingOrders.Add(standingOrder);
                 }
 
-                db.StandingOrders.Add(standingOrder);
-            }
+                // Idempotency: reject duplicate order for the same standing order + week
+                var duplicate = await db.Orders.AnyAsync(o =>
+                    o.StandingOrderId == standingOrder.Id && o.WeekOf.Date == weekOf.Date);
+                if (duplicate)
+                    return Results.Conflict("An order already exists for this standing order and week.");
 
-            // Idempotency: reject duplicate order for the same standing order + week
-            var duplicate = await db.Orders.AnyAsync(o =>
-                o.StandingOrderId == standingOrder.Id && o.WeekOf.Date == weekOf.Date);
-            if (duplicate)
-                return Results.Conflict("An order already exists for this standing order and week.");
+                standingOrderId = standingOrder.Id;
+            }
 
             ICollection<OrderLine> lines;
             if (req.Channel == OrderChannel.Insulated)
@@ -192,7 +199,7 @@ public static class OrderEndpoints
             var order = new Order
             {
                 Id              = Guid.NewGuid(),
-                StandingOrderId = standingOrder.Id,
+                StandingOrderId = standingOrderId,
                 CustomerId      = customerId,
                 ContactId       = req.ContactId,
                 Channel         = req.Channel,

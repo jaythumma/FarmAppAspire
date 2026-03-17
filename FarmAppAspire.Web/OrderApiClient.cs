@@ -21,11 +21,14 @@ public class OrderApiClient(HttpClient httpClient)
     }
 
     public async Task<AllOrderSummary[]> GetAllOrdersAsync(
-        Guid? customerId = null, string? status = null, CancellationToken cancellationToken = default)
+        Guid? customerId = null, string? status = null, string? channel = null,
+        DateTime? weekOf = null, CancellationToken cancellationToken = default)
     {
         var queryParts = new List<string>();
         if (customerId.HasValue) queryParts.Add($"customerId={customerId.Value}");
         if (status is not null) queryParts.Add($"status={Uri.EscapeDataString(status)}");
+        if (channel is not null) queryParts.Add($"channel={Uri.EscapeDataString(channel)}");
+        if (weekOf.HasValue) queryParts.Add($"weekOf={weekOf.Value:yyyy-MM-dd}");
         var url = "/orders" + (queryParts.Count > 0 ? "?" + string.Join("&", queryParts) : "");
         var result = await httpClient.GetFromJsonAsync<IEnumerable<AllOrderSummary>>(url, JsonOptions, cancellationToken);
         return result?.ToArray() ?? [];
@@ -203,7 +206,7 @@ public class OrderApiClient(HttpClient httpClient)
 
 public enum FedExTierSize { OneOz, TwoOz, FourOz, EightOz, OneLb, TwoLb, ThreeLb, FiveLb }
 public enum InsulatedBoxSize { FiveLb = 5, TenLb = 10, TwelveLb = 12 }
-public enum OrderFrequency { Weekly, BiWeekly, Monthly, OnRequest, Stopped }
+public enum OrderFrequency { Weekly, BiWeekly, Monthly, Stopped }
 public enum MonthlyWeek { First = 1, Second = 2, Third = 3, Fourth = 4 }
 
 public record FedExTierInfo(string TierSize, decimal WeightOz, decimal FixedPrice);
@@ -237,14 +240,14 @@ public record StandingOrderDetail(
     int TotalBoxes, decimal TotalWeightLbs, decimal TotalAmount,
     DateTime CreatedAt, string CreatedBy);
 
-public record OrderSummary(Guid Id, Guid StandingOrderId, Guid CustomerId, string Channel, string Status, DateTime WeekOf, bool IsSample, int TotalQty, decimal TotalAmount);
+public record OrderSummary(Guid Id, Guid? StandingOrderId, Guid CustomerId, string Channel, string Status, DateTime WeekOf, bool IsSample, int TotalQty, decimal TotalAmount);
 public record AllOrderSummary(
-    Guid Id, Guid StandingOrderId, Guid CustomerId,
+    Guid Id, Guid? StandingOrderId, Guid CustomerId,
     string CustomerDisplayName, string CustomerChannelType, string CustomerType,
     string Channel, string Status, DateTime WeekOf, bool IsSample,
     int TotalQty, decimal TotalAmount);
 public record OrderLine(Guid Id, string? BoxSize, int Qty, decimal? EffectivePricePerLb, string? FedExTierSize, decimal? FedExFixedPrice, string? PackagingType);
-public record OrderDetail(Guid Id, Guid StandingOrderId, Guid CustomerId, string Channel, string Status, DateTime WeekOf, bool IsSample, Guid? ContactId, int TotalQty, decimal TotalAmount, IReadOnlyList<OrderLine> Lines);
+public record OrderDetail(Guid Id, Guid? StandingOrderId, Guid CustomerId, string Channel, string Status, DateTime WeekOf, bool IsSample, Guid? ContactId, int TotalQty, decimal TotalAmount, IReadOnlyList<OrderLine> Lines);
 
 // ── Admin DTOs ────────────────────────────────────────────────────────────────
 public record GenerateOrdersRequest(DateTime ForWeek);

@@ -29,7 +29,6 @@ public class InvoiceCreationTests : IDisposable
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     private Guid _insulatedSoId;
-    private Guid _fedExSoId;
 
     private async Task<Customer> SeedCustomerAsync(string key = "MAN-CHI-IL")
     {
@@ -51,18 +50,10 @@ public class InvoiceCreationTests : IDisposable
             SeasonYear = 2024, StartWeek = new DateTime(2024, 6, 3),
             CreatedAt = DateTime.UtcNow, CreatedBy = "test"
         };
-        var fedExSo = new StandingOrder
-        {
-            Id = Guid.NewGuid(), CustomerId = customer.Id, Channel = OrderChannel.FedEx,
-            Frequency = OrderFrequency.OnRequest, Status = StandingOrderStatus.Active,
-            SeasonYear = 2024, StartWeek = new DateTime(2024, 6, 3),
-            CreatedAt = DateTime.UtcNow, CreatedBy = "test"
-        };
-        _db.StandingOrders.AddRange(insulatedSo, fedExSo);
+        _db.StandingOrders.AddRange(insulatedSo);
         await _db.SaveChangesAsync();
 
         _insulatedSoId = insulatedSo.Id;
-        _fedExSoId     = fedExSo.Id;
         return customer;
     }
 
@@ -70,7 +61,7 @@ public class InvoiceCreationTests : IDisposable
         bool isSample = false, DateTime? shipDate = null) => new()
     {
         Id              = Guid.NewGuid(),
-        StandingOrderId = channel == OrderChannel.FedEx ? _fedExSoId : _insulatedSoId,
+        StandingOrderId = channel == OrderChannel.FedEx ? null : _insulatedSoId,
         CustomerId      = customerId,
         Channel         = channel,
         Status          = OrderStatus.Shipped,

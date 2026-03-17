@@ -88,10 +88,6 @@ public static class AdminEndpoints
                 db.Orders.Add(order);
                 createdOrders.Add((order, so.Frequency));
 
-                // OnRequest: generate then auto-pause
-                if (so.Frequency == OrderFrequency.OnRequest)
-                    so.Status = StandingOrderStatus.Paused;
-
                 created++;
             }
 

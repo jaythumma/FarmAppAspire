@@ -28,7 +28,6 @@ public static class StandingOrderScheduleService
             OrderFrequency.Weekly    => true,
             OrderFrequency.BiWeekly  => IsBiWeeklyShipWeek(startWeek, skippedWeeks, lastShippedWeek, weekOf),
             OrderFrequency.Monthly   => monthlyWeek.HasValue && IsNthMondayOfMonth(weekOf, monthlyWeek.Value),
-            OrderFrequency.OnRequest => true,  // Active OnRequest orders generate once; caller auto-pauses afterward
             OrderFrequency.Stopped   => false,
             _ => false
         };

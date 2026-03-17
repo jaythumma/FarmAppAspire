@@ -3,6 +3,7 @@
 @attribute [Authorize]
 @inject CustomerApiClient CustomerApi
 @inject OrderApiClient OrderApi
+@inject NavigationManager Nav
 @implements IDisposable
 
 <PageTitle>Orders</PageTitle>
@@ -16,8 +17,54 @@
 
 <div class="d-flex justify-content-between align-items-center mb-3">
     <h1 class="mb-0">Orders</h1>
-    <a href="/orders/create" class="btn btn-primary">Add Order</a>
+    <div class="btn-group" role="group" aria-label="View mode">
+        <button type="button" class="btn btn-sm @(_thisWeek ? "btn-primary" : "btn-outline-primary")"
+                @onclick="SwitchToThisWeek">This Week</button>
+        <button type="button" class="btn btn-sm @(!_thisWeek ? "btn-primary" : "btn-outline-primary")"
+                @onclick="SwitchToAllOrders">All Orders</button>
+    </div>
 </div>
+
+@if (_thisWeek)
+{
+    <div class="card mb-3">
+        <div class="card-body py-2">
+            <div class="d-flex align-items-center gap-3 flex-wrap">
+                <button class="btn btn-sm btn-outline-secondary" @onclick="PrevWeek">‹ Prev</button>
+                <span class="fw-semibold px-1">Week of @_selectedWeek.ToString("ddd, MMM d, yyyy")</span>
+                <button class="btn btn-sm btn-outline-secondary" @onclick="NextWeek">Next ›</button>
+                <InputDate @bind-Value="_weekPickerDate" class="form-control form-control-sm"
+                           style="width:175px" @bind-Value:after="OnWeekPickerChanged"
+                           aria-label="Pick any date in the target week" />
+                <AuthorizeView Roles="FarmAdmin">
+                    <Authorized>
+                        <button class="btn btn-sm btn-success ms-auto"
+                                disabled="@_generating"
+                                @onclick="GenerateAsync">
+                            @if (_generating)
+                            {
+                                <span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>
+                                <span>Generating…</span>
+                            }
+                            else
+                            {
+                                <span>Generate Insulated Orders</span>
+                            }
+                        </button>
+                    </Authorized>
+                </AuthorizeView>
+            </div>
+        </div>
+    </div>
+    @if (_generateResult is not null)
+    {
+        <div class="alert @(_generateResult.GeneratedCount > 0 ? "alert-success" : "alert-secondary") alert-dismissible py-2 mb-3">
+            <strong>Week of @_generateResult.WeekOf.ToString("MMM d, yyyy"):</strong>
+            @_generateResult.GeneratedCount created, @_generateResult.SkippedCount skipped.
+            <button type="button" class="btn-close" @onclick="() => _generateResult = null"></button>
+        </div>
+    }
+}
 
 @if (_errorMessage is not null)
 {
@@ -47,6 +94,14 @@
             <option>Inspected</option>
             <option>Shipped</option>
             <option>Cancelled</option>
+        </select>
+    </div>
+    <div class="col-auto">
+        <label class="form-label fw-semibold">Channel</label>
+        <select class="form-select" @bind="_channelFilter" @bind:after="OnFilterChanged">
+            <option value="">All</option>
+            <option>Insulated</option>
+            <option>FedEx</option>
         </select>
     </div>
     <div class="col-auto">
@@ -193,22 +248,107 @@ else if (_allOrders is not null)
     private AllOrderSummary[]? _allOrders;
     private string _selectedCustomerId = "";
     private string _statusFilter = "";
+    private string _channelFilter = "";
     private string? _errorMessage;
     private bool _loading;
     private Guid? _inspectingOrderId;
     private DateTime _inspectDate = DateTime.Today;
     private readonly CancellationTokenSource _cts = new();
 
+    // ── Week mode state ───────────────────────────────────────────────────────
+    private bool _thisWeek = true;
+    private DateTime _selectedWeek;
+    private DateTime _weekPickerDate;
+    private bool _generating;
+    private GenerateOrdersResponse? _generateResult;
+
     // ── Sort / page state ─────────────────────────────────────────────────────
     private string _sortColumn  = "WeekOf";
-    private bool   _sortAscending = false;   // default: newest first
+    private bool   _sortAscending = false;
     private int    _currentPage  = 1;
     private int    _pageSize     = 25;
 
     protected override async Task OnInitializedAsync()
     {
+        _selectedWeek   = SnapToMonday(DateTime.UtcNow);
+        _weekPickerDate = _selectedWeek;
+
+        // Read query params to pre-populate filters
+        var uri     = new Uri(Nav.Uri);
+        var query   = System.Web.HttpUtility.ParseQueryString(uri.Query);
+        var cidStr  = query["customerId"];
+        var channel = query["channel"];
+
+        if (!string.IsNullOrEmpty(cidStr) && Guid.TryParse(cidStr, out _))
+        {
+            _selectedCustomerId = cidStr;
+            _thisWeek           = false;  // deep-linked with filters → switch to All mode
+        }
+        if (!string.IsNullOrEmpty(channel))
+        {
+            _channelFilter = channel;
+            _thisWeek      = false;
+        }
+
         _customers = await CustomerApi.GetCustomersAsync(cancellationToken: _cts.Token);
         await LoadOrdersAsync();
+    }
+
+    private async Task SwitchToThisWeek()
+    {
+        _thisWeek = true;
+        ResetPage();
+        await LoadOrdersAsync();
+    }
+
+    private async Task SwitchToAllOrders()
+    {
+        _thisWeek = false;
+        ResetPage();
+        await LoadOrdersAsync();
+    }
+
+    private async Task PrevWeek()
+    {
+        _selectedWeek   = _selectedWeek.AddDays(-7);
+        _weekPickerDate = _selectedWeek;
+        _generateResult = null;
+        ResetPage();
+        await LoadOrdersAsync();
+    }
+
+    private async Task NextWeek()
+    {
+        _selectedWeek   = _selectedWeek.AddDays(7);
+        _weekPickerDate = _selectedWeek;
+        _generateResult = null;
+        ResetPage();
+        await LoadOrdersAsync();
+    }
+
+    private async Task OnWeekPickerChanged()
+    {
+        _selectedWeek   = SnapToMonday(_weekPickerDate);
+        _weekPickerDate = _selectedWeek;
+        _generateResult = null;
+        ResetPage();
+        await LoadOrdersAsync();
+    }
+
+    private async Task GenerateAsync()
+    {
+        _generating   = true;
+        _errorMessage = null;
+        try
+        {
+            _generateResult = await OrderApi.GenerateOrdersAsync(_selectedWeek, _cts.Token);
+            if (_generateResult is not null) await LoadOrdersAsync();
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"Generate failed: {ex.Message}";
+        }
+        finally { _generating = false; }
     }
 
     private async Task OnFilterChanged()
@@ -221,10 +361,10 @@ else if (_allOrders is not null)
     {
         _loading = true;
         Guid? customerId = Guid.TryParse(_selectedCustomerId, out var id) ? id : null;
-        _allOrders = await OrderApi.GetAllOrdersAsync(
-            customerId,
-            _statusFilter.Length > 0 ? _statusFilter : null,
-            _cts.Token);
+        var status  = _statusFilter.Length  > 0 ? _statusFilter  : null;
+        var channel = _channelFilter.Length > 0 ? _channelFilter : null;
+        var weekOf  = _thisWeek ? _selectedWeek : (DateTime?)null;
+        _allOrders = await OrderApi.GetAllOrdersAsync(customerId, status, channel, weekOf, _cts.Token);
         _loading = false;
     }
 
@@ -301,6 +441,14 @@ else if (_allOrders is not null)
     private void ResetPage() => _currentPage = 1;
 
     // ── Render helpers ────────────────────────────────────────────────────────
+
+    private static DateTime SnapToMonday(DateTime date)
+    {
+        var d    = date.Date;
+        var diff = (int)d.DayOfWeek - (int)DayOfWeek.Monday;
+        if (diff < 0) diff += 7;
+        return d.AddDays(-diff);
+    }
 
     private RenderFragment SortHeader(string column, string label, string? extraCss = null) =>
         builder =>

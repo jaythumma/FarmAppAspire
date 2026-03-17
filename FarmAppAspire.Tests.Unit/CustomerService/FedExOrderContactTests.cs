@@ -64,7 +64,7 @@ public class FedExOrderContactTests : IDisposable
         var so = new StandingOrder
         {
             Id = Guid.NewGuid(), CustomerId = customerId, Channel = OrderChannel.FedEx,
-            Frequency = OrderFrequency.OnRequest, Status = StandingOrderStatus.Active,
+            Frequency = OrderFrequency.Weekly, Status = StandingOrderStatus.Active,
             SeasonYear = 2024, StartWeek = DateTime.UtcNow.Date,
             CreatedAt = DateTime.UtcNow, CreatedBy = "test"
         };
@@ -90,7 +90,7 @@ public class FedExOrderContactTests : IDisposable
         var instance = new Order
         {
             Id              = Guid.NewGuid(),
-            StandingOrderId = so.Id,
+            StandingOrderId = null,
             CustomerId      = customer.Id,
             ContactId       = contact.Id,
             Channel         = OrderChannel.FedEx,
@@ -142,7 +142,7 @@ public class FedExOrderContactTests : IDisposable
         var instance = new Order
         {
             Id              = Guid.NewGuid(),
-            StandingOrderId = so.Id,
+            StandingOrderId = null,
             CustomerId      = customer.Id,
             ContactId       = contactId,
             Channel         = OrderChannel.FedEx,

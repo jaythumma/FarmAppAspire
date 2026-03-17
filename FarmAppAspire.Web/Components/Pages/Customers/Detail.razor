@@ -2,6 +2,7 @@
 @rendermode InteractiveServer
 @attribute [Authorize]
 @inject CustomerApiClient CustomerApi
+@inject OrderApiClient OrderApi
 @inject NavigationManager Nav
 @implements IDisposable
 
@@ -350,6 +351,224 @@ else
     <div class="mt-3">
         <a href="/customers" class="btn btn-secondary">Back to List</a>
     </div>
+
+    @* ── Insulated Schedule ──────────────────────────────────────────────── *@
+    <div class="card mt-4">
+        <div class="card-header d-flex align-items-center gap-2">
+            <h5 class="mb-0">Insulated Schedule</h5>
+            @if (_insulatedSo is not null)
+            {
+                <span class="badge @StandingOrderRules.StatusBadgeClass(_insulatedSo.Status)">@_insulatedSo.Status</span>
+            }
+            <AuthorizeView Roles="FarmAdmin">
+                <Authorized>
+                    @if (_insulatedSo is not null && StandingOrderRules.CanEdit(_insulatedSo.Status))
+                    {
+                        <button class="btn btn-sm btn-outline-secondary ms-auto" @onclick="ToggleSoEdit">
+                            @(_soEditMode ? "Cancel" : "Edit")
+                        </button>
+                    }
+                    else if (_insulatedSo is null)
+                    {
+                        <a href="/standing-orders/create?customerId=@Id&channel=Insulated" class="btn btn-sm btn-primary ms-auto">Create Schedule</a>
+                    }
+                </Authorized>
+            </AuthorizeView>
+        </div>
+        <div class="card-body">
+            @if (_soError is not null)
+            {
+                <div class="alert alert-danger alert-dismissible py-2">
+                    @_soError
+                    <button type="button" class="btn-close" @onclick="() => _soError = null"></button>
+                </div>
+            }
+            @if (_insulatedSo is null)
+            {
+                <p class="text-muted mb-0">No active Insulated schedule for this customer.</p>
+            }
+            else if (_soEditMode)
+            {
+                <EditForm Model="_soEditForm" OnValidSubmit="SaveSoEditAsync">
+                    <DataAnnotationsValidator />
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-4">
+                            <label class="form-label fw-semibold">Frequency</label>
+                            <InputSelect @bind-Value="_soEditForm.Frequency" class="form-select">
+                                @foreach (var f in Enum.GetValues<OrderFrequency>().Where(f => f != OrderFrequency.Stopped))
+                                {
+                                    <option value="@f">@f</option>
+                                }
+                            </InputSelect>
+                        </div>
+                        @if (_soEditForm.Frequency == OrderFrequency.Monthly)
+                        {
+                            <div class="col-md-4">
+                                <label class="form-label fw-semibold">Monthly Week</label>
+                                <InputSelect @bind-Value="_soEditForm.MonthlyWeek" class="form-select">
+                                    <option value="">— select —</option>
+                                    @foreach (var w in Enum.GetValues<MonthlyWeek>())
+                                    {
+                                        <option value="@w">@w</option>
+                                    }
+                                </InputSelect>
+                            </div>
+                        }
+                    </div>
+                    <h6>Box Lines</h6>
+                    @foreach (var line in _soEditForm.Lines)
+                    {
+                        var captureLine = line;
+                        <div class="row g-2 mb-2 align-items-end">
+                            <div class="col-auto">
+                                <label class="form-label">Box Size</label>
+                                <InputSelect @bind-Value="captureLine.BoxSize" class="form-select form-select-sm">
+                                    @foreach (var sz in Enum.GetValues<InsulatedBoxSize>())
+                                    {
+                                        <option value="@sz">@sz</option>
+                                    }
+                                </InputSelect>
+                            </div>
+                            <div class="col-auto">
+                                <label class="form-label">Qty</label>
+                                <InputNumber @bind-Value="captureLine.Qty" class="form-control form-control-sm" style="width:70px" min="1" />
+                            </div>
+                            <div class="col-auto">
+                                <button type="button" class="btn btn-sm btn-outline-danger"
+                                        @onclick="() => _soEditForm.Lines.Remove(captureLine)">✕</button>
+                            </div>
+                        </div>
+                    }
+                    <button type="button" class="btn btn-sm btn-outline-secondary mb-3"
+                            @onclick="() => _soEditForm.Lines.Add(new SoLineEditItem())">+ Add Line</button>
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-sm btn-primary">Save</button>
+                        <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="() => _soEditMode = false">Cancel</button>
+                    </div>
+                </EditForm>
+            }
+            else
+            {
+                <dl class="row mb-2">
+                    <dt class="col-sm-3">Season</dt>
+                    <dd class="col-sm-9">@_insulatedSo.SeasonYear</dd>
+                    <dt class="col-sm-3">Frequency</dt>
+                    <dd class="col-sm-9">@_insulatedSo.Frequency@(_insulatedSo.MonthlyWeek is not null ? $" ({_insulatedSo.MonthlyWeek})" : "")</dd>
+                    <dt class="col-sm-3">Est. Weekly</dt>
+                    <dd class="col-sm-9">@_insulatedSo.TotalBoxes box@(_insulatedSo.TotalBoxes != 1 ? "es" : "") · @_insulatedSo.TotalWeightLbs.ToString("0.#") lbs · @_insulatedSo.TotalAmount.ToString("C")</dd>
+                </dl>
+                @if (_insulatedSo.Lines.Any())
+                {
+                    <table class="table table-sm mb-2" style="width:auto">
+                        <thead><tr><th>Box Size</th><th>Qty</th></tr></thead>
+                        <tbody>
+                            @foreach (var l in _insulatedSo.Lines)
+                            {
+                                <tr><td>@l.BoxSize</td><td>@l.Qty</td></tr>
+                            }
+                        </tbody>
+                    </table>
+                }
+                @if (_insulatedSo.Skips.Any())
+                {
+                    <p class="mb-1"><strong>Skips:</strong> @string.Join(", ", _insulatedSo.Skips.Select(s => s.WeekOf.ToString("MMM d")))</p>
+                }
+
+                <AuthorizeView Roles="FarmAdmin">
+                    <Authorized>
+                        <div class="d-flex gap-2 mb-3 flex-wrap">
+                            @if (StandingOrderRules.CanPause(_insulatedSo.Status))
+                            {
+                                <button class="btn btn-sm btn-warning" @onclick="PauseSoAsync">Pause</button>
+                            }
+                            @if (StandingOrderRules.CanResume(_insulatedSo.Status))
+                            {
+                                <button class="btn btn-sm btn-success" @onclick="ResumeSoAsync">Resume</button>
+                            }
+                            @if (StandingOrderRules.CanStop(_insulatedSo.Status))
+                            {
+                                @if (_confirmStop)
+                                {
+                                    <button class="btn btn-sm btn-danger" @onclick="StopSoAsync">Confirm Stop</button>
+                                    <button class="btn btn-sm btn-outline-secondary" @onclick="() => _confirmStop = false">Cancel</button>
+                                }
+                                else
+                                {
+                                    <button class="btn btn-sm btn-outline-danger" @onclick="() => _confirmStop = true">Stop</button>
+                                }
+                            }
+                            @if (!_showSkipForm)
+                            {
+                                <button class="btn btn-sm btn-outline-secondary" @onclick="() => _showSkipForm = true">Add Skip Week</button>
+                            }
+                        </div>
+                        @if (_showSkipForm)
+                        {
+                            <div class="d-flex gap-2 align-items-end mb-3">
+                                <div>
+                                    <label class="form-label mb-1 fw-semibold">Skip week of</label>
+                                    <InputDate @bind-Value="_skipDate" class="form-control form-control-sm" style="width:175px" />
+                                </div>
+                                <button class="btn btn-sm btn-primary" @onclick="AddSkipAsync">Add Skip</button>
+                                <button class="btn btn-sm btn-outline-secondary" @onclick="() => _showSkipForm = false">Cancel</button>
+                            </div>
+                        }
+                    </Authorized>
+                </AuthorizeView>
+
+                @if (_recentInsulatedOrders.Length > 0)
+                {
+                    <h6 class="mb-2">Recent Orders</h6>
+                    <table class="table table-sm table-hover mb-1" style="width:auto">
+                        <tbody>
+                            @foreach (var o in _recentInsulatedOrders)
+                            {
+                                <tr>
+                                    <td>@o.WeekOf.ToString("MMM d, yyyy")</td>
+                                    <td><span class="badge @OrderLifecycleRules.StatusBadgeClass(o.Status)">@o.Status</span></td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                }
+                <a href="/orders?customerId=@Id&channel=Insulated" class="small">View all Insulated orders →</a>
+            }
+        </div>
+    </div>
+
+    @* ── FedEx Orders ────────────────────────────────────────────────────── *@
+    <div class="card mt-3 mb-4">
+        <div class="card-header d-flex align-items-center gap-2">
+            <h5 class="mb-0">FedEx Orders</h5>
+            <AuthorizeView Roles="FarmAdmin">
+                <Authorized>
+                    <a href="/orders/create?customerId=@Id&channel=FedEx" class="btn btn-sm btn-primary ms-auto">+ New FedEx Order</a>
+                </Authorized>
+            </AuthorizeView>
+        </div>
+        <div class="card-body">
+            @if (_recentFedExOrders.Length == 0)
+            {
+                <p class="text-muted mb-0">No FedEx orders yet.</p>
+            }
+            else
+            {
+                <table class="table table-sm table-hover mb-1">
+                    <tbody>
+                        @foreach (var o in _recentFedExOrders)
+                        {
+                            <tr>
+                                <td>@o.WeekOf.ToString("MMM d, yyyy")</td>
+                                <td>@o.TotalQty item@(o.TotalQty != 1 ? "s" : "") · @o.TotalAmount.ToString("C")</td>
+                                <td><span class="badge @OrderLifecycleRules.StatusBadgeClass(o.Status)">@o.Status</span></td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+            <a href="/orders?customerId=@Id&channel=FedEx" class="small">View all FedEx orders →</a>
+        </div>
+    </div>
 }
 
 @code {
@@ -359,6 +578,30 @@ else
     private string _keyEditValue = string.Empty;
     private string? _keyError;
     private readonly CancellationTokenSource _cts = new();
+
+    // ── Insulated schedule state ──────────────────────────────────────────
+    private StandingOrderDetail? _insulatedSo;
+    private OrderSummary[] _recentInsulatedOrders = [];
+    private OrderSummary[] _recentFedExOrders = [];
+    private bool _soEditMode;
+    private SoEditForm _soEditForm = new();
+    private string? _soError;
+    private bool _confirmStop;
+    private bool _showSkipForm;
+    private DateTime _skipDate = DateTime.Today;
+
+    private sealed class SoEditForm
+    {
+        public OrderFrequency Frequency { get; set; } = OrderFrequency.Weekly;
+        public MonthlyWeek? MonthlyWeek { get; set; }
+        public List<SoLineEditItem> Lines { get; set; } = [];
+    }
+
+    private sealed class SoLineEditItem
+    {
+        public InsulatedBoxSize BoxSize { get; set; } = InsulatedBoxSize.TwelveLb;
+        public int Qty { get; set; } = 1;
+    }
 
     // ── Contact state ────────────────────────────────────────────────────────
     private ContactForm _contactForm = new();
@@ -385,6 +628,23 @@ else
     protected override async Task OnInitializedAsync()
     {
         _customer = await CustomerApi.GetCustomerAsync(Id, _cts.Token);
+
+        var soTask = OrderApi.GetStandingOrdersAsync(Id, _cts.Token);
+        var insulatedOrdersTask = OrderApi.GetOrdersAsync(Id, cancellationToken: _cts.Token);
+        await Task.WhenAll(soTask, insulatedOrdersTask);
+
+        var allSos = await soTask;
+        _insulatedSo = allSos.FirstOrDefault(s => s.Channel == "Insulated");
+
+        var allOrders = await insulatedOrdersTask;
+        _recentInsulatedOrders = allOrders
+            .Where(o => o.Channel == "Insulated")
+            .OrderByDescending(o => o.WeekOf)
+            .Take(5).ToArray();
+        _recentFedExOrders = allOrders
+            .Where(o => o.Channel == "FedEx")
+            .OrderByDescending(o => o.WeekOf)
+            .Take(5).ToArray();
     }
 
     // ── Customer Key ─────────────────────────────────────────────────────────
@@ -505,6 +765,95 @@ else
             _customer = _customer! with { Contacts = _customer.Contacts.Where(c => c.Id != contactId).ToArray() };
         }
         _pendingDeleteId = null;
+    }
+
+    // ── Insulated schedule actions ────────────────────────────────────────
+    private void ToggleSoEdit()
+    {
+        if (!_soEditMode && _insulatedSo is not null)
+        {
+            _soEditForm = new SoEditForm
+            {
+                Frequency   = Enum.Parse<OrderFrequency>(_insulatedSo.Frequency),
+                MonthlyWeek = _insulatedSo.MonthlyWeek is not null
+                                  ? Enum.Parse<MonthlyWeek>(_insulatedSo.MonthlyWeek)
+                                  : null,
+                Lines       = _insulatedSo.Lines
+                                  .Select(l => new SoLineEditItem
+                                  {
+                                      BoxSize = Enum.Parse<InsulatedBoxSize>(l.BoxSize),
+                                      Qty     = l.Qty
+                                  }).ToList()
+            };
+        }
+        _soEditMode = !_soEditMode;
+    }
+
+    private async Task PauseSoAsync()
+    {
+        if (_insulatedSo is null) return;
+        _soError = null;
+        var ok = await OrderApi.PauseStandingOrderAsync(Id, _insulatedSo.Id, _cts.Token);
+        if (ok) _insulatedSo = await OrderApi.GetStandingOrderAsync(Id, _insulatedSo.Id, _cts.Token);
+        else _soError = "Failed to pause schedule.";
+    }
+
+    private async Task ResumeSoAsync()
+    {
+        if (_insulatedSo is null) return;
+        _soError = null;
+        var ok = await OrderApi.ResumeStandingOrderAsync(Id, _insulatedSo.Id, _cts.Token);
+        if (ok) _insulatedSo = await OrderApi.GetStandingOrderAsync(Id, _insulatedSo.Id, _cts.Token);
+        else _soError = "Failed to resume schedule.";
+    }
+
+    private async Task StopSoAsync()
+    {
+        if (_insulatedSo is null) return;
+        _soError = null;
+        var ok = await OrderApi.StopStandingOrderAsync(Id, _insulatedSo.Id, _cts.Token);
+        if (ok) _insulatedSo = await OrderApi.GetStandingOrderAsync(Id, _insulatedSo.Id, _cts.Token);
+        else _soError = "Failed to stop schedule.";
+        _confirmStop = false;
+    }
+
+    private async Task AddSkipAsync()
+    {
+        if (_insulatedSo is null) return;
+        _soError = null;
+        if (!StandingOrderRules.CanAddSkip(_skipDate, DateTime.UtcNow))
+        {
+            _soError = "Skip deadline has passed (Friday cutoff).";
+            return;
+        }
+        var ok = await OrderApi.AddSkipWeekAsync(Id, _insulatedSo.Id, _skipDate, _cts.Token);
+        if (ok)
+        {
+            _insulatedSo = await OrderApi.GetStandingOrderAsync(Id, _insulatedSo.Id, _cts.Token);
+            _showSkipForm = false;
+        }
+        else _soError = "Failed to add skip week.";
+    }
+
+    private async Task SaveSoEditAsync()
+    {
+        if (_insulatedSo is null) return;
+        _soError = null;
+        var req = new WebUpdateStandingOrderRequest(
+            _soEditForm.Frequency,
+            _soEditForm.MonthlyWeek,
+            _insulatedSo.IsSample,
+            _insulatedSo.ContactId,
+            _soEditForm.Lines.Select(l => new StandingOrderLineRequest(l.BoxSize, l.Qty)).ToList());
+        try
+        {
+            _insulatedSo = await OrderApi.UpdateStandingOrderAsync(Id, _insulatedSo.Id, req, _cts.Token);
+            _soEditMode = false;
+        }
+        catch (HttpRequestException ex)
+        {
+            _soError = ex.Message;
+        }
     }
 
     public void Dispose() => _cts.Cancel();

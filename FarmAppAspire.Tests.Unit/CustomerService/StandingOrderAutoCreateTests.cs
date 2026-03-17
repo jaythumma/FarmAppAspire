@@ -51,7 +51,7 @@ public class StandingOrderAutoCreateTests : IDisposable
             Id         = Guid.NewGuid(),
             CustomerId = customerId,
             Channel    = channel,
-            Frequency  = channel == OrderChannel.FedEx ? OrderFrequency.OnRequest : OrderFrequency.Weekly,
+            Frequency  = OrderFrequency.Weekly,
             Status     = StandingOrderStatus.Active,
             SeasonYear = 2024,
             StartWeek  = new DateTime(2024, 6, 3),

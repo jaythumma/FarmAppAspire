@@ -62,7 +62,7 @@ public record OrderLineDto(
     FedExPackagingType? PackagingType);
 
 public record OrderDto(
-    Guid Id, Guid StandingOrderId, Guid CustomerId, Guid? ContactId,
+    Guid Id, Guid? StandingOrderId, Guid CustomerId, Guid? ContactId,
     OrderChannel Channel, OrderStatus Status,
     DateTime WeekOf, DateTime? ShipDate, bool IsSample,
     IReadOnlyList<OrderLineDto> Lines,
@@ -128,7 +128,7 @@ public record WeekOrderSummary(
 
 public record AllOrdersSummaryDto(
     Guid Id,
-    Guid StandingOrderId,
+    Guid? StandingOrderId,
     Guid CustomerId,
     string CustomerDisplayName,
     string CustomerChannelType,

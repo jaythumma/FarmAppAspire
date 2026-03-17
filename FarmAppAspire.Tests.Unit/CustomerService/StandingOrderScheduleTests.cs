@@ -70,19 +70,6 @@ public class StandingOrderScheduleTests
             weekOf: secondMonday, monthlyWeek: MonthlyWeek.First));
     }
 
-    // ── OnRequest ─────────────────────────────────────────────────────────────
-
-    [Fact]
-    public void OnRequest_ReturnsTrue_WhenStatusIsActive()
-    {
-        // OnRequest orders participate in the normal generate-instances cycle when Active.
-        // The caller (AdminEndpoints) sets the standing order back to Paused after generating.
-        var start = new DateTime(2024, 6, 3);
-        var weekOf = start.AddDays(7);
-        Assert.True(StandingOrderScheduleService.ShouldGenerateForWeek(
-            OrderFrequency.OnRequest, start, skippedWeeks: [], lastShippedWeek: null, weekOf: weekOf));
-    }
-
     // ── Stopped ───────────────────────────────────────────────────────────────
 
     [Fact]

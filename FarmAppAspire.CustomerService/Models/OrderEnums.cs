@@ -16,7 +16,7 @@ public enum FedExTierSize
     FiveLb = 80
 }
 
-public enum OrderFrequency { Weekly, BiWeekly, Monthly, OnRequest, Stopped }
+public enum OrderFrequency { Weekly, BiWeekly, Monthly, Stopped }
 
 public enum MonthlyWeek { First = 1, Second = 2, Third = 3, Fourth = 4 }
 
