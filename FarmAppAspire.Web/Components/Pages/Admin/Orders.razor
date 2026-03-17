@@ -11,22 +11,23 @@
 
 @* ── Generate Instances ──────────────────────────────────────────────────── *@
 <div class="card mb-4">
-    <div class="card-header"><h5 class="mb-0">Generate Orders</h5></div>
+    <div class="card-header">
+        <div class="d-flex align-items-center gap-3">
+            <h5 class="mb-0">Generate Orders</h5>
+            <div class="ms-auto d-flex align-items-center gap-2">
+                <button class="btn btn-sm btn-outline-secondary" @onclick="GeneratePreviousWeek">‹ Prev</button>
+                <span class="fw-semibold px-2">@SnapToMonday(_generateDate).ToString("ddd, MMM d, yyyy")</span>
+                <button class="btn btn-sm btn-outline-secondary" @onclick="GenerateNextWeek">Next ›</button>
+            </div>
+        </div>
+    </div>
     <div class="card-body">
         <div class="row g-3 align-items-end">
             <div class="col-auto">
-                <label class="form-label fw-semibold">Pick any date in the target week</label>
+                <label class="form-label fw-semibold">Or pick any date in the target week</label>
                 <InputDate @bind-Value="_generateDate"
                            class="form-control"
-                           @bind-Value:after="OnGenerateDateChanged" />
-            </div>
-            <div class="col-auto align-self-end pb-1">
-                @if (_generateDate != default)
-                {
-                    <span class="text-muted">
-                        Will generate for week of <strong>@SnapToMonday(_generateDate).ToString("ddd, MMM d, yyyy")</strong>
-                    </span>
-                }
+                           @bind-Value:after="OnGenerateDateChangedAsync" />
             </div>
             <div class="col-auto align-self-end">
                 <button class="btn btn-primary"
@@ -216,9 +217,28 @@
         await LoadBrowseAsync();
     }
 
-    private void OnGenerateDateChanged()
+    private async Task OnGenerateDateChangedAsync()
     {
         _generateDate = SnapToMonday(_generateDate);
+        await SyncBrowseToGenerateAsync();
+    }
+
+    private async Task GeneratePreviousWeek()
+    {
+        _generateDate = SnapToMonday(_generateDate).AddDays(-7);
+        await SyncBrowseToGenerateAsync();
+    }
+
+    private async Task GenerateNextWeek()
+    {
+        _generateDate = SnapToMonday(_generateDate).AddDays(7);
+        await SyncBrowseToGenerateAsync();
+    }
+
+    private async Task SyncBrowseToGenerateAsync()
+    {
+        _browseDate = _generateDate;
+        await LoadBrowseAsync();
     }
 
     private static DateTime SnapToMonday(DateTime date)
