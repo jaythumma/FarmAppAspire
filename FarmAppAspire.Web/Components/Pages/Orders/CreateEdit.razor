@@ -54,7 +54,19 @@ else
         {
             <dl class="row mb-3">
                 <dt class="col-sm-3">Customer</dt>
-                <dd class="col-sm-9">@_existingOrder?.CustomerId</dd>
+                <dd class="col-sm-9">
+                    @{
+                        var customerSummary = _customers.FirstOrDefault(c => c.Id == _existingOrder?.CustomerId);
+                    }
+                    @if (customerSummary is not null)
+                    {
+                        <a href="/customers/@customerSummary.Id">@customerSummary.DisplayName</a>
+                    }
+                    else if (_existingOrder is not null)
+                    {
+                        <span>@_existingOrder.CustomerId</span>
+                    }
+                </dd>
                 <dt class="col-sm-3">Week Of</dt>
                 <dd class="col-sm-9">@_existingOrder?.WeekOf.ToString("MMM d, yyyy")</dd>
                 <dt class="col-sm-3">Channel</dt>

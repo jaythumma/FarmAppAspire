@@ -16,7 +16,7 @@ public static class AdminEndpoints
         g.MapPost("/generate-orders", async (GenerateOrdersRequest req, CustomerDbContext db, HttpContext ctx) =>
         {
             var userId     = ctx.Request.Headers["X-User-Id"].FirstOrDefault() ?? "system";
-            var weekOf     = SeasonYearService.MondayOf(req.ForWeek);
+            var weekOf     = DateTime.SpecifyKind(SeasonYearService.MondayOf(req.ForWeek).Date, DateTimeKind.Utc);
             var seasonYear = SeasonYearService.CurrentSeasonYear(weekOf);
 
             var activeOrders = await db.StandingOrders
@@ -44,7 +44,7 @@ public static class AdminEndpoints
             {
                 // Idempotency: skip if order already exists for this week
                 if (await db.Orders.AnyAsync(i =>
-                        i.StandingOrderId == so.Id && i.WeekOf.Date == weekOf.Date))
+                        i.StandingOrderId == so.Id && i.WeekOf >= weekOf && i.WeekOf < weekOf.AddDays(1)))
                 {
                     skipped++;
                     continue;
@@ -120,13 +120,14 @@ public static class AdminEndpoints
         // ── Browse orders for a given week ─────────────────────────────────────
         g.MapGet("/orders", async (CustomerDbContext db, DateTime? weekOf = null) =>
         {
-            var week = SeasonYearService.MondayOf(weekOf ?? DateTime.UtcNow);
+            var weekStart = DateTime.SpecifyKind(SeasonYearService.MondayOf(weekOf ?? DateTime.UtcNow).Date, DateTimeKind.Utc);
+            var weekEnd   = weekStart.AddDays(1);
 
             try
             {
                 var orders = await db.Orders
                     .Include(i => i.Lines)
-                    .Where(i => i.WeekOf.Date == week.Date)
+                    .Where(i => i.WeekOf >= weekStart && i.WeekOf < weekEnd)
                     .OrderBy(i => i.CustomerId)
                     .ToListAsync();
 
@@ -153,7 +154,7 @@ public static class AdminEndpoints
                         o.IsSample,
                         qty,
                         amount);
-                }).ToList();
+                }).OrderBy(s => s.CustomerDisplayName).ToList();
 
                 return Results.Ok(result);
             }
