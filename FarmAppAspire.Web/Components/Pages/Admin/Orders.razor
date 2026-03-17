@@ -16,9 +16,13 @@
         <div class="row g-3 align-items-end">
             <div class="col-auto">
                 <label class="form-label fw-semibold">Pick any date in the target week</label>
-                <InputDate @bind-Value="_generateDate"
-                           class="form-control"
-                           @bind-Value:after="OnGenerateDateChanged" />
+                <div class="d-flex align-items-center gap-2">
+                    <button class="btn btn-sm btn-outline-secondary" @onclick="GeneratePreviousWeek">‹ Prev</button>
+                    <InputDate @bind-Value="_generateDate"
+                               class="form-control"
+                               @bind-Value:after="OnGenerateDateChanged" />
+                    <button class="btn btn-sm btn-outline-secondary" @onclick="GenerateNextWeek">Next ›</button>
+                </div>
             </div>
             <div class="col-auto align-self-end pb-1">
                 @if (_generateDate != default)
@@ -219,6 +223,16 @@
     private void OnGenerateDateChanged()
     {
         _generateDate = SnapToMonday(_generateDate);
+    }
+
+    private void GeneratePreviousWeek()
+    {
+        _generateDate = SnapToMonday(_generateDate).AddDays(-7);
+    }
+
+    private void GenerateNextWeek()
+    {
+        _generateDate = SnapToMonday(_generateDate).AddDays(7);
     }
 
     private static DateTime SnapToMonday(DateTime date)
